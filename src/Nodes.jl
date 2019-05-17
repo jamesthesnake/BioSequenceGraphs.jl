@@ -14,10 +14,11 @@ and they have an end (marked '-').
 
 Furthuremore, nodes are canonical or palindromic sequences, else they are reverted.
 """
-struct SequenceGraphNode{S <: BioSequence}
+struct SequenceGraphNode{S <:Sequence}
     sequence::S
     active::Bool
 end
+
 
 sequence(sn::SequenceGraphNode) = sn.sequence
 

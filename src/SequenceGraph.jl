@@ -1,12 +1,10 @@
-
-
 struct SequenceGraph
     nodes::Vector{SequenceGraphNode}
     links::Vector{Vector{SequenceGraphLink}}
 end
 
 nodes(sg::SequenceGraph) = sg.nodes
-node(sg::SequenceGraph, i::NodeID) = nodes(sg)[abs(i)] 
+node(sg::SequenceGraph, i::NodeID) = nodes(sg)[abs(i)]
 links(sg::SequenceGraph) = sg.links
 
 """
