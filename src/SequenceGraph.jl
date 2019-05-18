@@ -7,6 +7,8 @@ nodes(sg::SequenceGraph) = sg.nodes
 node(sg::SequenceGraph, i::NodeID) = nodes(sg)[abs(i)]
 links(sg::SequenceGraph) = sg.links
 
+
+
 """
     links(sg::SequenceGraph, node::NodeID)
 
@@ -60,6 +62,30 @@ function remove_link!(sg::SequenceGraph, source::NodeID, dest::NodeID)
 end
 
 
+
+"""
+    find_overlaps(X::Vector{SequenceGraphNode})
+
+Finds the overlaps of length length(Node.sequence)-1 between all Nodes in the vector X
+
+Returns a vector of Tuples where each Tuple (i,j) corresonds to a directed edge (forward link) from i to j
+
+For constructing the De Bruijn Graph links we need the overlapping sequence information
+We first formulate the forward links as tuples with indices
+Then using these tuple indices we will create the SequenceGraphLinks and finalize the Graph Construction
+"""
+function find_overlaps(X::Vector{SequenceGraphNode})
+    overlaps = Vector{Tuple{Int64,Int64}}()
+    for i in 1:size(X)[1]
+        for j in 1:size(X)[1]
+            if String(X[i].sequence)[2:end]==String(X[j].sequence)[1:end-1]
+                println("Overlap between $(X[i].sequence) and $(X[j].sequence)")
+                push!(overlaps,(i,j))
+            end
+        end
+    end
+    return overlaps
+end
 
 
 
