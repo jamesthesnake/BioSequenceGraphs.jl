@@ -79,7 +79,7 @@ function find_overlaps(X::Vector{SequenceGraphNode})
     for i in 1:size(X)[1]
         for j in 1:size(X)[1]
             if String(X[i].sequence)[2:end]==String(X[j].sequence)[1:end-1]
-                println("Overlap between $(X[i].sequence) and $(X[j].sequence)")
+                #println("Overlap between $(X[i].sequence) and $(X[j].sequence)")
                 push!(overlaps,(i,j))
             end
         end
@@ -88,7 +88,58 @@ function find_overlaps(X::Vector{SequenceGraphNode})
 end
 
 
+"""
+    deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAcid,K}
 
+Returns a BioSequenceGraph constructed by the kmers
+
+For now lets assume that we have Kmers prepared already
+So for an unknown DNA sequence we have Spectrum(s,k) where Spectrum(s,l)
+is the multiset of n-l+1 l-mers in s.
+
+Our De Bruijn Graph constructor takes as input some kmers and puts a directed link between
+every two nodes n1,n2 such that n1[2:] = n2[:k-1], i.e overlap(n1,n2) == k-1
+first we find the overlaps between each node by doing an computationally expensive exhaustive search
+over all pairs
+
+deBruijn_Constructor takes as input some number of kmers kmer_i, generates Sequence Graph Nodes n_i
+such that each n_i.sequence = kmer_i
+
+The constructor generates  nodes in the same order in the input kmer vector
+
+Also the constructor adds empty  vector for each node with no forward link
+So the number of vectorsin Links match with number of nodes in Nodes
+"""
+function my_deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAcid,K}
+    Nodes = Vector{SequenceGraphNode}()
+    for kmer in kmer_vector
+        node = SequenceGraphNode(kmer,true)
+        push!(Nodes,node)
+    end
+    overlaps = find_overlaps(Nodes)
+    Links = Vector{Vector{SequenceGraphLink}}()
+    prev_i = 1 ## initial NodeID
+    current_node_vector = Vector{SequenceGraphLink}()
+    for overlap in overlaps
+        if overlap[1]!=prev_i
+            push!(Links,current_node_vector)
+            current_node_vector = Vector{SequenceGraphLink}()
+            for i in prev_i:overlap[1]-1
+                push!(Links,Vector{SequenceGraphLink}())
+            end
+            prev_i = overlap[1]
+        end
+        ## links are generated from - end of outgoing node to the + end of the incoming one
+        link = SequenceGraphLink(-overlap[1],overlap[2],1) ## right now dist is initialized as 1
+        push!(current_node_vector,link)
+    end
+    push!(Links,current_node_vector)
+    for i in prev_i+1:size(Nodes)[1]
+        push!(Links,Vector{SequenceGraphLink}())
+    end
+    deBruijn_Graph = SequenceGraph(Nodes,Links)
+    deBruijn_Graph
+end
 
 """
     forward_links(sg::SequenceGraph, n::NodeID)
