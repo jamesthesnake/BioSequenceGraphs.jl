@@ -110,7 +110,7 @@ The constructor generates  nodes in the same order in the input kmer vector
 Also the constructor adds empty  vector for each node with no forward link
 So the number of vectorsin Links match with number of nodes in Nodes
 """
-function my_deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAcid,K}
+function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAcid,K}
     Nodes = Vector{SequenceGraphNode}()
     for kmer in kmer_vector
         node = SequenceGraphNode(kmer,true)
