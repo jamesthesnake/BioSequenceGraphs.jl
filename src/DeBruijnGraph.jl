@@ -57,7 +57,9 @@ function find_overlaps(X::Vector{SequenceGraphNode})
 end
 
 """
+    find_overlaps(dbg::DeBruijnGraph,n::SequenceGraphNode)
 
+Returns a list of tuples which will be used to add links to the DeBruijnGraph
 finds the overlaps between a node and all nodes in a dbg
 """
 function find_overlaps(dbg::DeBruijnGraph,n::SequenceGraphNode)
@@ -80,7 +82,7 @@ end
     add_node(dbg::DeBruijnGraph,n::SequenceGraphNode)
 
 Before adding the node to the graph we find the overlaps between the newly added node and then include it
-Maybe we can consider checking if it already exists 
+Maybe we can consider checking if it already exists
 For now my plan is to add each corresponding link automatically when we add a node
 """
 function add_node(dbg::DeBruijnGraph,n::SequenceGraphNode)
@@ -89,7 +91,7 @@ function add_node(dbg::DeBruijnGraph,n::SequenceGraphNode)
     len = Base.length(dbg.nodes)
     push!(dbg.links,Vector{SequenceGraphLink}()) ## push an empty vector to the links
     for overlap in overlaps
-        link = SequenceGraphLink(overlap[1],overlap[2])
+        link = SequenceGraphLink(-overlap[1],overlap[2])
         push!(dbg.links[overlap[1]],link)
         println(link)
     end
