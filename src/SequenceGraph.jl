@@ -28,7 +28,7 @@ Add a SequenceGraphNode `n` to a SequenceGraph `sg`.
 Returns the node ID used to access the node added from the graph.
 """
 function add_node!(sg::SequenceGraph, n::SequenceGraphNode)
-    newlen = length(push!(nodes(sg)))
+    newlen = length(push!(nodes(sg),n))
     resize!(links(sg), newlen)
     return newlen
 end
