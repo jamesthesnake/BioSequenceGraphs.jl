@@ -12,7 +12,8 @@ end
 nodes(dbg::DeBruijnGraph) = dbg.nodes
 node(dbg::DeBruijnGraph, i::NodeID) = nodes(dbg)[abs(i)]
 links(dbg::DeBruijnGraph) = dbg.links
-
+indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)
+outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)
 
 """
     links(sg::SequenceGraph, node::NodeID)
