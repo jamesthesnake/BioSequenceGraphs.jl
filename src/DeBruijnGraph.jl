@@ -151,3 +151,55 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
     deBruijn_Graph = DeBruijnGraph(Nodes,Links)
     deBruijn_Graph
 end
+
+
+# Query Functions
+# --------
+
+# Counters
+# ------
+
+"""
+    count_indegree(dbg::DeBruijnGraph,n::NodeID)
+
+Returns the number of incoming edges to the SequenceGraphNode with id NodeID on the DeBruijnGraph
+
+Makes an exhaustive search on all the SequenceGraphLinks on the dbg
+Now checking only the source end of the node we have to discuss about the design
+Maybe we can store incoming and outgoing edges for each node for O(N) query time where N denotes number of SequenceGraphNodes
+"""
+function count_indegree(dbg::DeBruijnGraph,n::NodeID)
+    dest = n
+    in_degree = 0
+    for i in 1:Base.length(nodes(dbg))
+        links_ = links(dbg,i)
+        for l in links_
+            if destination(l)==dest  ## checking only the source end of the node, not sure!
+                in_degree +=1
+            end
+        end
+    end
+    in_degree
+end
+
+
+
+"""
+    count_outdegree(dbg::DeBruijnGraph,n::NodeID)
+
+Returns the number of incoming edges to the SequenceGraphNode with id NodeID on the DeBruijnGraph
+
+Makes an exhaustive search on all the SequenceGraphLinks on the dbg
+Now checking only the sink end of the node we have to discuss about the design
+O(K) query time
+"""
+function count_outdegree(dbg::DeBruijnGraph,n::NodeID)
+    source_ = -n  ## checking the sink end of the node for outgoing edges
+    out_degree = 0
+    for link in links(dbg,n)
+        if source_ == source(link)
+            out_degree +=1
+        end
+    end
+    out_degree
+end
