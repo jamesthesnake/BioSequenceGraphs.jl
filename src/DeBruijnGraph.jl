@@ -13,7 +13,8 @@ nodes(dbg::DeBruijnGraph) = dbg.nodes
 node(dbg::DeBruijnGraph, i::NodeID) = nodes(dbg)[abs(i)]
 links(dbg::DeBruijnGraph) = dbg.links
 indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)
-outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)
+
+
 
 """
     links(sg::SequenceGraph, node::NodeID)
@@ -203,4 +204,18 @@ function count_outdegree(dbg::DeBruijnGraph,n::NodeID)
         end
     end
     out_degree
+end
+
+
+# Path queries
+# ------
+
+"""
+
+    For now we assume that only one vertex exist with associated with a certain kmer
+"""
+function is_a_path(dbg::DeBruijnGraph,seq::BioSequence)
+    
+
+
 end
