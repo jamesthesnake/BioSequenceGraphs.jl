@@ -87,7 +87,7 @@ Before adding the node to the graph we find the overlaps between the newly added
 Maybe we can consider checking if it already exists
 For now my plan is to add each corresponding link automatically when we add a node
 """
-function add_node(dbg::DeBruijnGraph,n::SequenceGraphNode)
+function add_node!(dbg::DeBruijnGraph,n::SequenceGraphNode)
     overlaps  = find_overlaps(dbg,n)
     push!(dbg.nodes,n)
     len = Base.length(dbg.nodes)
@@ -210,12 +210,71 @@ end
 # Path queries
 # ------
 
+
 """
+    is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
 
-    For now we assume that only one vertex exist with associated with a certain kmer
+Returns the NodeIDs of all matches and returns true is the path exists completely in dbg
+
+If complete match is not found still returns the indexes of all the matches
+
+min_match is the initial kmer length k used during dbg construction
+After node merging we still have k-1 overlaps between nodes because we only merge the simple paths
+
+Start from a node and traverse its links.
+Stop at the first false during traversal as there can not be another path starting from another node!
+
+
 """
-function is_a_path(dbg::DeBruijnGraph,seq::BioSequence)
-    
+function is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
+    index = -1
+    indexes = Vector{Int64}()
+    nodes_ = nodes(dbg)
+    match = -1
+    for i in 1:Base.length(nodes_)
+        match =  is_suffix(seq,nodes_[i])
+        if match!=-1
+            index = i
+            println(nodes_[i])
+            break
+        end
+    end
+    if index==-1
+        return false
+    else ## traverse on the children until remaining is smaller than or equal to min_match length
+        ## since kmers overlap with k-1 min_match+1 overlap is carried to the next step
+        push!(indexes,index)
+        remaining_seq = sub_seq(seq,match+1-min_match+1)
+        rem_len = length(remaining_seq)
+        println("Remaining: "*String(remaining_seq))
+        println("Remaining length : "* string(length(remaining_seq)))
+        while rem_len > 0 ## the remaining must match the next node from index 1
+            found = false
+            for link in links(dbg)[index]
+                node = nodes_[destination(link)]
+                node_seq = sequence(node)
+                min_length = min(rem_len,length(node_seq))
+                println(min_length)
+                if is_match(remaining_seq,1,node_seq,1,min_length)
 
-
+                    found = true
+                    index = destination(link)
+                    push!(indexes,index)
+                    println(nodes_[index])
+                    if min_length ==rem_len
+                        println("Match Found!!")
+                        return true,indexes
+                    end
+                    remaining_seq = sub_seq(remaining_seq,rem_len-min_match+1)
+                    rem_len = length(remaining_seq)
+                    println(remaining_seq)
+                    continue
+                end
+            end
+            if found ==false
+                return false,indexes
+            end
+        end
+    end
+    return true,indexes
 end
