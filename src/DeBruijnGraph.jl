@@ -219,12 +219,13 @@ Returns the NodeIDs of all matches and returns true is the path exists completel
 If complete match is not found still returns the indexes of all the matches
 
 min_match is the initial kmer length k used during dbg construction
-After node merging we still have k-1 overlaps between nodes because we only merge the simple paths
-
+After node merging we still have k-1 overlaps between nodes because we only merge the simple paths.
 Start from a node and traverse its links.
 Stop at the first false during traversal as there can not be another path starting from another node!
 
 
+Making use of is_suffix from Nodes.jl and is_match from sequence.jl
+TO-DO : Make sure these dependencies function properly
 """
 function is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
     index = -1
