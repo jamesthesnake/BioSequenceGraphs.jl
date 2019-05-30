@@ -30,8 +30,22 @@ end
 
 For now this is empty. We have to decide about the design concepts first!!!
 """
-function add_link(dbg::DeBruijnGraph,l::SequenceGraphLink)
+function add_link!(dbg::DeBruijnGraph,l::SequenceGraphLink)
 
+end
+
+
+"""
+    is_overlap(sn1::SequenceGraphNode,sn2::SequenceGraphNdoe,k::Int)
+
+k is given as the length of the node labels are subject to changes during node merging
+Returns true if suffix to prefix overlap of length k-1 exists
+Checks overlap of k-1 long suffix of sn1 with prefix of sn2
+"""
+function is_overlap(sn1::SequenceGraphNode,sn2::SequenceGraphNode,k::Int)
+    l1 = length(sn1)
+    l2 = length(sn2)
+    String(sn1.sequence)[l1-k+2:end]==String(sn2.sequence)[1:k-1]
 end
 
 """
@@ -45,11 +59,12 @@ For constructing the De Bruijn Graph links we need the overlapping sequence info
 We first formulate the forward links as tuples with indices
 Then using these tuple indices we will create the SequenceGraphLinks and finalize the Graph Construction
 """
-function find_overlaps(X::Vector{SequenceGraphNode})
+function find_overlaps(X::Vector{SequenceGraphNode},k::Int)
     overlaps = Vector{Tuple{Int64,Int64}}()
     for i in 1:size(X)[1]
         for j in 1:size(X)[1]
-            if String(X[i].sequence)[2:end]==String(X[j].sequence)[1:end-1]
+            if is_overlap(X[i],X[j],k)
+            #if String(X[i].sequence)[2:end]==String(X[j].sequence)[1:end-1]
                 #println("Overlap between $(X[i].sequence) and $(X[j].sequence)")
                 push!(overlaps,(i,j))
             end
@@ -62,16 +77,18 @@ end
     find_overlaps(dbg::DeBruijnGraph,n::SequenceGraphNode)
 
 Returns a list of tuples which will be used to add links to the DeBruijnGraph
-finds the overlaps between a node and all nodes in a dbg
+finds the overlaps between a node and all nodes in a dbg of length k-1
 """
-function find_overlaps(dbg::DeBruijnGraph,n::SequenceGraphNode)
+function find_overlaps(dbg::DeBruijnGraph,n::SequenceGraphNode,k::Int)
     nodeid = Base.length(dbg.nodes)+1
     overlaps = Vector{Tuple{Int64,Int64}}()
     for i in 1:nodeid-1
-        if String(dbg.nodes[i].sequence)[2:end]==String(n.sequence)[1:end-1]
+        if is_overlap(dbg.nodes[i],n,k)
+        #if String(dbg.nodes[i].sequence)[2:end]==String(n.sequence)[1:end-1]
             push!(overlaps,(i,nodeid))
             println("Overlap between $(dbg.nodes[i].sequence) and $(n.sequence)")
-        elseif String(dbg.nodes[i].sequence)[1:end-1]==String(n.sequence)[2:end]
+        elseif is_overlap(n,dbg.nodes[i],k)
+        #elseif String(dbg.nodes[i].sequence)[1:end-1]==String(n.sequence)[2:end]
             push!(overlaps,(nodeid,i))
             println("Overlap between $(dbg.nodes[i].sequence) and $(n.sequence)")
         end
