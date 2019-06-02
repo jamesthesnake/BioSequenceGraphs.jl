@@ -1,11 +1,12 @@
 """
     DeBruijnGraph is also SequenceGraph with a special design concept
-
+    k denotes the initial kmer length that is used during constructing the dbg
 """
 
 struct DeBruijnGraph
     nodes::Vector{SequenceGraphNode}
     links::Vector{Vector{SequenceGraphLink}}
+    k ::Int
 end
 
 
@@ -13,6 +14,7 @@ nodes(dbg::DeBruijnGraph) = dbg.nodes
 node(dbg::DeBruijnGraph, i::NodeID) = nodes(dbg)[abs(i)]
 links(dbg::DeBruijnGraph) = dbg.links
 indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)
+outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)
 
 
 
@@ -61,10 +63,11 @@ Then using these tuple indices we will create the SequenceGraphLinks and finaliz
 """
 function find_overlaps(X::Vector{SequenceGraphNode},k::Int)
     overlaps = Vector{Tuple{Int64,Int64}}()
-    for i in 1:size(X)[1]
-        for j in 1:size(X)[1]
+    for i in eachindex(X)
+        for j in eachindex(X)
             if is_overlap(X[i],X[j],k)
             #if String(X[i].sequence)[2:end]==String(X[j].sequence)[1:end-1]
+                #println("AAAAAAAAAAAAA")
                 #println("Overlap between $(X[i].sequence) and $(X[j].sequence)")
                 push!(overlaps,(i,j))
             end
@@ -118,10 +121,74 @@ function add_node!(dbg::DeBruijnGraph,n::SequenceGraphNode)
     nodeid
 end
 
+
+"""
+    new_deBruijn_Constructor(kmer_vector::Vector{Kmer{T,K}})where{T,K}
+
+
+Returns a dbg consisting of a vector of SequenceGraphNodes, a vector of SequenceGraphLinks and an integer k for the kmer length
+
+New Constructor for the DeBruijnGraph where we simultaneously consider a kmer and its reverse complement
+We define the beginning of the canonical form of the kmer as the (+) end
+And end of the canonical form as the (-) ends
+
+"""
+function new_deBruijn_Constructor(kmer_vector::Vector{Kmer{T,K}})where{T,K}
+    fw_nodes = Vector{Tuple{Kmer{T,K-1},Int64}}()
+    bw_nodes = Vector{Tuple{Kmer{T,K-1},Int64}}()
+
+    nodes = Vector{SequenceGraphNode}()
+    links  = Vector{Vector{SequenceGraphLink}}()
+
+    i = 1
+    flag = 0
+    ## adding unique kmers to graph in their canonical form
+    for kmer in kmer_vector
+        for node in nodes
+            if canonical(kmer) == sequence(node) ## now assuming only kmers are inserted during construction
+                flag = 1
+                break
+            end
+        end
+        if flag == 0 ## new kmer
+            can_kmer = canonical(kmer)
+            push!(nodes,SequenceGraphNode(can_kmer,true))
+            pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
+            suf = Kmer{T,K-1}(String(can_kmer)[2:end])
+            if canonical(pref) == pref ## add prefix to forward nodes
+                push!(fw_nodes,(pref,i))
+            else
+                push!(bw_nodes,(canonical(pref),i))
+            end
+            a = 1
+            if canonical(suf) == suf ## add suffix to backward nodes (outgoing edge)
+                push!(bw_nodes,(suf,-i))
+            else
+                push!(fw_nodes,(canonical(suf),-i))
+            end
+        end
+        flag = 0
+        i= i + 1
+    end
+
+    for kbn in bw_nodes
+        links_ = Vector{SequenceGraphLink}()
+        for kfn in fw_nodes
+            if first(kfn)==first(kbn)
+                push!(links_,SequenceGraphLink(last(kbn),last(kfn),-K+1)) ## i did not quiet get -k+1
+            end
+        end
+        push!(links,links_)
+    end
+    dbg = DeBruijnGraph(nodes,links,K)
+end
+
+
+
 """
     deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAcid,K}
 
-Returns a BioSequenceGraph constructed by the kmers
+Returns a DeBruijnGraph constructed by the kmers
 
 For now lets assume that we have Kmers prepared already
 So for an unknown DNA sequence we have Spectrum(s,k) where Spectrum(s,l)
@@ -146,7 +213,7 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
         node = SequenceGraphNode(kmer,true)
         push!(Nodes,node)
     end
-    overlaps = find_overlaps(Nodes)
+    overlaps = find_overlaps(Nodes,K)
     Links = Vector{Vector{SequenceGraphLink}}()
     prev_i = 1 ## initial NodeID
     current_node_vector = Vector{SequenceGraphLink}()
@@ -167,8 +234,40 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
     for i in prev_i+1:size(Nodes)[1]
         push!(Links,Vector{SequenceGraphLink}())
     end
-    deBruijn_Graph = DeBruijnGraph(Nodes,Links)
+    deBruijn_Graph = DeBruijnGraph(Nodes,Links,K)
     deBruijn_Graph
+end
+
+
+
+
+
+function new_deBruijn_Constructor(kmer_vector::Vector{Kmer{T,K}})where{T,K}
+    fw_nodes = Vector{Tuple{Kmer{T,K-1},NodeID}}
+    bw_nodes = Vector{Tuple{Kmer{T,K-1},NodeID}}
+    nodes = Vector{SequenceGraphNode}()
+    i = 1
+    flag = 0
+
+    ## adding unique kmers to graph in their canonical form
+    for kmer in kmer_vector
+        for node in nodes
+            if canonical(kmer) == sequence(node) ## now assuming only kmers are inserted during construction
+                flag = 1
+                break
+            end
+        end
+        if flag == 0 ## new kmer
+            can_kmer = canonical(kmer)
+            push!(SequenceGraphNode(can_kmer,i++))
+            pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
+            suf = Kmer{T,K-1}(String(can_kmer)[2:end])
+            if canonical(pref) == pref
+                push!(fw_nodes,)
+        end
+    end
+
+
 end
 
 
@@ -227,6 +326,10 @@ end
 # Path queries
 # ------
 
+
+function is_simple_path(dbg::DeBruijnGraph,seq::Sequence)
+
+end
 
 """
     is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
