@@ -45,6 +45,36 @@ end
 iscanonical(sn::SequenceGraphNode) = iscanonical(sequence(sn))
 
 
+
+"""
+    is_suffix2(seq::Sequence,sn::SequenceGraphNode,direction::Int64,min_match = 3)
+
+This function will soon replace the version 1 but for now we are keeping both
+Check if any prefix of seq is a suffix of sn starting from the longest one
+if direction is 1 check kmer suffixes otherwise check reverse complement's suffixes
+min_match limits the minimum matching and it is the kmer length during dbg contstruction
+
+returns the length of the match, returns -1 otherwise
+
+TO-DO: replace with a faster substring matcher
+"""
+function is_suffix2(seq::Sequence,sn::SequenceGraphNode;direction=1,min_match = 3)
+    if direction==-1
+        sn_seq = reverse_complement(sequence(sn))
+    else
+        sn_seq = sequence(sn)
+    end
+    seqlen = Base.length(seq)
+    snlen  = Base.length(sn_seq)
+    max_match = min(seqlen,snlen)
+    for i in max_match:-1:min_match ##possible match length
+        if is_match(seq,1,sn_seq,snlen-i+1,i)
+            return i
+        end
+    end
+    return -1
+end
+
 """
     is_suffix(seq::Sequence,sn::SequenceGraphNode,min_match = 3)
 
@@ -55,13 +85,12 @@ returns the length of the match, returns -1 otherwise
 
 TO-DO: replace with a faster substring matcher
 """
-function is_suffix(seq::Sequence,sn::SequenceGraphNode,min_match = 3)
-    seqlen = length(seq)
+function is_suffix(seq::Sequence,sn::SequenceGraphNode;min_match = 3)
+    seqlen = Base.length(seq)
     snlen  = Base.length(sequence(sn))
     max_match = min(seqlen,snlen)
     for i in max_match:-1:min_match ##possible match length
         if is_match(seq,1,sequence(sn),snlen-i+1,i)
-
             return i
         end
     end

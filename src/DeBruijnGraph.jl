@@ -12,6 +12,7 @@ end
 
 nodes(dbg::DeBruijnGraph) = dbg.nodes
 node(dbg::DeBruijnGraph, i::NodeID) = nodes(dbg)[abs(i)]
+k_value(dbg::DeBruijnGraph) = dbg.k
 links(dbg::DeBruijnGraph) = dbg.links
 indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)
 outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)
@@ -40,7 +41,7 @@ end
 """
     is_overlap(sn1::SequenceGraphNode,sn2::SequenceGraphNdoe,k::Int)
 
-k is given as the length of the node labels are subject to changes during node merging
+k is given as an additional information, as the length of the node labels are subject to changes during node merging
 Returns true if suffix to prefix overlap of length k-1 exists
 Checks overlap of k-1 long suffix of sn1 with prefix of sn2
 """
@@ -147,33 +148,50 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
     flag = 0
     ## adding unique kmers to graph in their canonical form
     for kmer in kmer_set
+        println(kmer)
         can_kmer = canonical(kmer)
         push!(nodes,SequenceGraphNode(can_kmer,true))
         pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
         suf = Kmer{T,K-1}(String(can_kmer)[2:end])
+
         if canonical(pref) == pref ## add prefix to forward nodes
             push!(fw_nodes,(pref,i))
+            if pref == reverse_complement(pref)
+                push!(bw_nodes,(pref,i))
+            end
         else
             push!(bw_nodes,(canonical(pref),i))
         end
         a = 1
         if canonical(suf) == suf ## add suffix to backward nodes (outgoing edge)
             push!(bw_nodes,(suf,-i))
+            if suf == reverse_complement(suf)
+                push!(fw_nodes,(suf,-i))
+            end
         else
             push!(fw_nodes,(canonical(suf),-i))
         end
         i= i + 1
     end
-
+    prev = last(bw_nodes[1])
+    links_ = Vector{SequenceGraphLink}()
     for kbn in bw_nodes
-        links_ = Vector{SequenceGraphLink}()
+        if abs(last(kbn))!=prev
+            push!(links,links_)
+            for i in prev+1:abs(last(kbn))-1
+                push!(links,Vector{SequenceGraphLink}())
+            end
+            links_ = Vector{SequenceGraphLink}()
+        end
         for kfn in fw_nodes
             if first(kfn)==first(kbn)
+                print()
                 push!(links_,SequenceGraphLink(last(kbn),last(kfn),-K+1)) ## i did not quiet get -k+1
             end
         end
-        push!(links,links_)
+        prev = abs(last(kbn))
     end
+    push!(links,links_)
     dbg = DeBruijnGraph(nodes,links,K)
 end
 
@@ -236,40 +254,15 @@ end
 
 
 
-function new_deBruijn_Constructor(kmer_vector::Vector{Kmer{T,K}})where{T,K}
-    fw_nodes = Vector{Tuple{Kmer{T,K-1},NodeID}}
-    bw_nodes = Vector{Tuple{Kmer{T,K-1},NodeID}}
-    nodes = Vector{SequenceGraphNode}()
-    i = 1
-    flag = 0
-
-    ## adding unique kmers to graph in their canonical form
-    for kmer in kmer_vector
-        for node in nodes
-            if canonical(kmer) == sequence(node) ## now assuming only kmers are inserted during construction
-                flag = 1
-                break
-            end
-        end
-        if flag == 0 ## new kmer
-            can_kmer = canonical(kmer)
-            push!(SequenceGraphNode(can_kmer,i++))
-            pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
-            suf = Kmer{T,K-1}(String(can_kmer)[2:end])
-            if canonical(pref) == pref
-                push!(fw_nodes,)
-        end
-    end
-
-
-end
-
 
 # Query Functions
 # --------
 
 # Counters
 # ------
+# Counters count the indegree and outdegree separately for the (+) and  (-) nodes
+# edges to and out of the  (+) end  represent the path through canonical kmer
+# edges to and out of the  (-) end represent the path through non-canonical kmer
 
 """
     count_indegree(dbg::DeBruijnGraph,n::NodeID)
@@ -306,7 +299,7 @@ Now checking only the sink end of the node we have to discuss about the design
 O(K) query time
 """
 function count_outdegree(dbg::DeBruijnGraph,n::NodeID)
-    source_ = -n  ## checking the sink end of the node for outgoing edges
+    source_ = n  ## checking the sink end of the node for outgoing edges
     out_degree = 0
     for link in links(dbg,n)
         if source_ == source(link)
@@ -321,14 +314,32 @@ end
 # ------
 
 
+"""
+
+Returns if a given sequence is in a dbg  and also all the internal nodes have in_degree and  out_degree equal to one.
+
+
+"""
+
 function is_simple_path(dbg::DeBruijnGraph,seq::Sequence)
 
 end
 
-"""
-    is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
 
-Returns the NodeIDs of all matches and returns true is the path exists completely in dbg
+
+
+function canonical_bio(x::BioSequence{A})where{A}
+    y = reverse_complement(x)
+    return x < y ? x : y
+end
+
+"""
+    is_a_path2(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
+
+Version two for is_a_path for the new dbg designed
+Soon will replace version 1
+
+Returns the NodeIDs of all matches and returns true if the path exists completely in dbg
 
 If complete match is not found still returns the indexes of all the matches
 
@@ -339,7 +350,103 @@ Stop at the first false during traversal as there can not be another path starti
 
 
 Making use of is_suffix from Nodes.jl and is_match from sequence.jl
-TO-DO : Make sure these dependencies function properly
+TO-DOs :
+    1 - Make sure these dependencies function properly
+    2 - Check if a kmer  is contained completely in a node
+"""
+function is_a_path2(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
+    #seq = canonical_bio(seq)
+    println(seq)
+    index = 0
+    indexes = Vector{Int64}()
+    nodes_ = nodes(dbg)
+    match = -1
+    for i in 1:Base.length(nodes_)
+        match =  is_suffix2(seq,nodes_[i],direction=1,min_match=min_match)
+        match_rev = is_suffix2(seq,nodes_[i],direction=-1,min_match=min_match)
+        if match == Base.length(seq) || match_rev == Base.length(seq)
+            return true, i
+        end
+
+        if match!=-1
+            index = -i
+            println(nodes_[i])
+            break
+        elseif match_rev!=-1
+            index = i
+            match = match_rev
+            seq1 = reverse_complement(sequence(nodes_[i]))
+            println("Reverse complement Match: "*String(seq1))
+            break
+        end
+    end
+    if index==0
+        return false
+
+    else ## traverse on the children until remaining is smaller than or equal to min_match length
+        ## since kmers overlap with k-1 min_match+1 overlap is carried to the next step
+        push!(indexes,index)
+        remaining_seq = sub_seq(seq,match-min_match+1)
+        rem_len = Base.length(remaining_seq)
+        println("Remaining: "*String(remaining_seq))
+        println("Remaining length : "* string(Base.length(remaining_seq)))
+        println("Index: $(index)")
+        #index = index * -1
+        while rem_len > 0 ## the remaining must match the next node from index 1
+            found = false
+            for link in links(dbg)[abs(index)]
+                if source(link)==index ## if the direction  is correct
+                    dest_ind  = destination(link)
+                    node = nodes_[abs(dest_ind)]
+                    println("Destination $(dest_ind)")
+                    if dest_ind > 0
+                        node_seq = sequence(node)
+                    else
+                        node_seq = reverse_complement(sequence(node))
+                    end
+                    println("Node sequence : $(node_seq)")
+                    min_length = min(rem_len,Base.length(node_seq))
+                    if is_match(remaining_seq,1,node_seq,1,min_length)
+                        found = true
+                        push!(indexes, dest_ind)
+                        index = -dest_ind
+                        println(nodes_[abs(index)])
+                        if min_length ==rem_len
+                            println("Match Found!!")
+                            return true,indexes
+                        end
+                        remaining_seq = sub_seq(remaining_seq,min_length-min_match+1)
+                        rem_len = Base.length(remaining_seq)
+                        println("Remaining : $(remaining_seq)")
+                        continue
+                    end
+                end
+            end
+            if found ==false
+                return false,indexes
+            end
+        end
+    end
+    return true,indexes
+end
+
+"""
+    is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
+
+Returns the NodeIDs of all matches and returns true if the path exists completely in dbg
+
+If complete match is not found still returns the indexes of all the matches
+
+min_match is the initial kmer length k used during dbg construction
+After node merging we still have k-1 overlaps between nodes because we only merge the simple paths.
+Start from a node and traverse its links.
+Stop at the first false during traversal as there can not be another path starting from another node!
+
+
+Making use of is_suffix from Nodes.jl and is_match from sequence.jl
+TO-DOs :
+    1 - Make sure these dependencies function properly
+    2 - Check if a kmer  is contained completely in a node
 """
 function is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
     index = -1
@@ -347,7 +454,7 @@ function is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
     nodes_ = nodes(dbg)
     match = -1
     for i in 1:Base.length(nodes_)
-        match =  is_suffix(seq,nodes_[i])
+        match =  is_suffix(seq,nodes_[i],min_match =min_match)
         if match!=-1
             index = i
             println(nodes_[i])
@@ -360,15 +467,15 @@ function is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
         ## since kmers overlap with k-1 min_match+1 overlap is carried to the next step
         push!(indexes,index)
         remaining_seq = sub_seq(seq,match+1-min_match+1)
-        rem_len = length(remaining_seq)
+        rem_len = Base.length(remaining_seq)
         println("Remaining: "*String(remaining_seq))
-        println("Remaining length : "* string(length(remaining_seq)))
+        println("Remaining length : "* string(Base.length(remaining_seq)))
         while rem_len > 0 ## the remaining must match the next node from index 1
             found = false
             for link in links(dbg)[index]
                 node = nodes_[destination(link)]
                 node_seq = sequence(node)
-                min_length = min(rem_len,length(node_seq))
+                min_length = min(rem_len,Base.length(node_seq))
                 println(min_length)
                 if is_match(remaining_seq,1,node_seq,1,min_length)
 
@@ -381,7 +488,7 @@ function is_a_path(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
                         return true,indexes
                     end
                     remaining_seq = sub_seq(remaining_seq,rem_len-min_match+1)
-                    rem_len = length(remaining_seq)
+                    rem_len = Base.length(remaining_seq)
                     println(remaining_seq)
                     continue
                 end
