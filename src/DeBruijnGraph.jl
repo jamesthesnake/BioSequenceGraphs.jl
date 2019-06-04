@@ -16,8 +16,14 @@ k_value(dbg::DeBruijnGraph) = dbg.k
 links(dbg::DeBruijnGraph) = dbg.links
 indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)
 outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)
+bothways_indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)+ count_indegree(dbg,-i)
+bothways_outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)+ count_outdegree(dbg,-i)
 
 
+function canonical_bio(x::BioSequence{A})where{A}
+    y = reverse_complement(x)
+    return x < y ? x : y
+end
 
 """
     links(sg::SequenceGraph, node::NodeID)
@@ -154,6 +160,8 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
         suf = Kmer{T,K-1}(String(can_kmer)[2:end])
 
+
+        ### adding both ways if pref == reverse_complement(pref)
         if canonical(pref) == pref ## add prefix to forward nodes
             push!(fw_nodes,(pref,i))
             if pref == reverse_complement(pref)
@@ -162,7 +170,9 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         else
             push!(bw_nodes,(canonical(pref),i))
         end
+
         a = 1
+        ### adding both ways if suf == reverse_complement(suf)
         if canonical(suf) == suf ## add suffix to backward nodes (outgoing edge)
             push!(bw_nodes,(suf,-i))
             if suf == reverse_complement(suf)
@@ -299,10 +309,10 @@ Now checking only the sink end of the node we have to discuss about the design
 O(K) query time
 """
 function count_outdegree(dbg::DeBruijnGraph,n::NodeID)
-    source_ = n  ## checking the sink end of the node for outgoing edges
+    source_ =  n  ## checking the sink end of the node for outgoing edges
     out_degree = 0
     for link in links(dbg,n)
-        if source_ == source(link)
+        if source_ == abs(source(link))
             out_degree +=1
         end
     end
@@ -321,17 +331,44 @@ Returns if a given sequence is in a dbg  and also all the internal nodes have in
 
 """
 
-function is_simple_path(dbg::DeBruijnGraph,seq::Sequence)
+function is_simple_path(seq::Sequence,dbg::DeBruijnGraph)
+    is_path,path = is_a_path2(seq,dbg,min_match=k_value(dbg)-1)
+    print(path)
+    simple_path = []
+    if is_path
+        if bothways_outdegree(dbg,abs(path[1]))>1
+            println("Out degree of node $(path[1]) is $(bothways_outdegree(dbg,abs(path[1])))")
+            return false
+        end
+        push!(simple_path,abs(path[1]))
+        for nodeid in path[2:end-1]
+            indeg = bothways_indegree(dbg,abs(nodeid))
+            outdeg = bothways_outdegree(dbg,abs(nodeid))
+            if indeg==1 &&outdeg==1
+                push!(simple_path,abs(nodeid))
+            else
+                println("Node $(nodeid) has $(indeg) indegrees and $(outdeg) outdegreess")
+                return false,simple_path
 
+            end
+
+        end
+        if Base.length(path)==1
+            return true,simple_path
+        end
+        if bothways_indegree(dbg,abs(path[end]))==1
+            push!(simple_path,abs(path[end]))
+            return true,simple_path
+        else
+            return false,simple_path
+        end
+    end
+    return false
 end
 
 
 
 
-function canonical_bio(x::BioSequence{A})where{A}
-    y = reverse_complement(x)
-    return x < y ? x : y
-end
 
 """
     is_a_path2(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
@@ -365,7 +402,8 @@ function is_a_path2(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
         match =  is_suffix2(seq,nodes_[i],direction=1,min_match=min_match)
         match_rev = is_suffix2(seq,nodes_[i],direction=-1,min_match=min_match)
         if match == Base.length(seq) || match_rev == Base.length(seq)
-            return true, i
+            push!(indexes,i)
+            return true, indexes
         end
 
         if match!=-1
