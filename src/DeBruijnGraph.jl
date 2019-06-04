@@ -4,8 +4,8 @@
 """
 
 struct DeBruijnGraph
-    nodes::Vector{SequenceGraphNode}
-    links::Vector{Vector{SequenceGraphLink}}
+    nodes::Dict{Int64,SequenceGraphNode}
+    links::Dict{Int64,Vector{SequenceGraphLink}}
     k ::Int
 end
 
@@ -16,8 +16,14 @@ k_value(dbg::DeBruijnGraph) = dbg.k
 links(dbg::DeBruijnGraph) = dbg.links
 indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)
 outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)
+bothways_indegree(dbg::DeBruijnGraph,i::NodeID) = count_indegree(dbg,i)+ count_indegree(dbg,-i)
+bothways_outdegree(dbg::DeBruijnGraph,i::NodeID) = count_outdegree(dbg,i)+ count_outdegree(dbg,-i)
 
 
+function canonical_bio(x::BioSequence{A})where{A}
+    y = reverse_complement(x)
+    return x < y ? x : y
+end
 
 """
     links(sg::SequenceGraph, node::NodeID)
@@ -123,6 +129,7 @@ function add_node!(dbg::DeBruijnGraph,n::SequenceGraphNode)
 end
 
 
+
 """
     new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
 
@@ -154,6 +161,8 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
         suf = Kmer{T,K-1}(String(can_kmer)[2:end])
 
+
+        ### adding both ways if pref == reverse_complement(pref)
         if canonical(pref) == pref ## add prefix to forward nodes
             push!(fw_nodes,(pref,i))
             if pref == reverse_complement(pref)
@@ -162,7 +171,9 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         else
             push!(bw_nodes,(canonical(pref),i))
         end
+
         a = 1
+        ### adding both ways if suf == reverse_complement(suf)
         if canonical(suf) == suf ## add suffix to backward nodes (outgoing edge)
             push!(bw_nodes,(suf,-i))
             if suf == reverse_complement(suf)
@@ -173,7 +184,7 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         end
         i= i + 1
     end
-    prev = last(bw_nodes[1])
+    prev = abs(last(bw_nodes[1]))
     links_ = Vector{SequenceGraphLink}()
     for kbn in bw_nodes
         if abs(last(kbn))!=prev
@@ -192,7 +203,13 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         prev = abs(last(kbn))
     end
     push!(links,links_)
-    dbg = DeBruijnGraph(nodes,links,K)
+    nodes_new = Dict{Int64,SequenceGraphNode}()
+    links_new = Dict{Int64,Vector{SequenceGraphLink}}()
+    for (node_id,node) in enumerate(nodes)
+        nodes_new[node_id] = node
+        links_new[node_id] = links[node_id]
+    end
+    dbg = DeBruijnGraph(nodes_new,links_new,K)
 end
 
 
@@ -251,8 +268,52 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
 end
 
 
+# Simple path finders for unitigging
+# -----
 
+"""
+    simple_path_finder(dbg)
 
+Returns a list of paths which correspond to unitigs that can not be further extended
+
+More testing is necessary
+
+The main idea is that there  can be  at most 1  simple path originating from each node with outdegree 1
+
+So an exhaustive search is not very expensive if we only look at nodes with incoming > 1 or  incoming == 0 and out==1
+Looking at nodes with incoming >  1 will give us the maximal unitigs
+On the other hand, looking at nodes with outgoing = 1 will give all simple paths
+"""
+
+function simple_path_finder(dbg)
+    simple_path = Vector()
+    links1 = links(dbg)
+    for node_id in 1:Base.length(nodes(dbg))
+        path = Vector()
+        parent = node_id
+        flag = true
+
+        ## start of a maximal unitig in_degree >2 or 0 and out_degree ==1
+        if (bothways_indegree(dbg,node_id)==0 || bothways_indegree(dbg,node_id)>1 )&& bothways_outdegree(dbg,node_id)==1
+            push!(path,parent)
+            parent = abs(destination(links1[node_id][1]))
+            while bothways_outdegree(dbg,parent)==1 && bothways_indegree(dbg,parent)==1
+                push!(path,parent)
+                parent = abs(destination(links1[parent][1]))
+            end
+
+            ## if the indegree==1 extend the path to include the final kmer at then end of the path
+            ## o/w skip
+            if bothways_indegree(dbg,parent)==1
+                push!(path,parent)
+            end
+            println("Maximal path found!")
+            println(path)
+            push!(simple_path,path)
+        end
+    end
+    simple_path
+end
 
 
 # Query Functions
@@ -299,10 +360,10 @@ Now checking only the sink end of the node we have to discuss about the design
 O(K) query time
 """
 function count_outdegree(dbg::DeBruijnGraph,n::NodeID)
-    source_ = n  ## checking the sink end of the node for outgoing edges
+    source_ =  n  ## checking the sink end of the node for outgoing edges
     out_degree = 0
     for link in links(dbg,n)
-        if source_ == source(link)
+        if source_ == abs(source(link))
             out_degree +=1
         end
     end
@@ -321,17 +382,44 @@ Returns if a given sequence is in a dbg  and also all the internal nodes have in
 
 """
 
-function is_simple_path(dbg::DeBruijnGraph,seq::Sequence)
+function is_simple_path(seq::Sequence,dbg::DeBruijnGraph)
+    is_path,path = is_a_path2(seq,dbg,min_match=k_value(dbg)-1)
+    print(path)
+    simple_path = []
+    if is_path
+        if bothways_outdegree(dbg,abs(path[1]))>1
+            println("Out degree of node $(path[1]) is $(bothways_outdegree(dbg,abs(path[1])))")
+            return false
+        end
+        push!(simple_path,abs(path[1]))
+        for nodeid in path[2:end-1]
+            indeg = bothways_indegree(dbg,abs(nodeid))
+            outdeg = bothways_outdegree(dbg,abs(nodeid))
+            if indeg==1 &&outdeg==1
+                push!(simple_path,abs(nodeid))
+            else
+                println("Node $(nodeid) has $(indeg) indegrees and $(outdeg) outdegreess")
+                return false,simple_path
 
+            end
+
+        end
+        if Base.length(path)==1
+            return true,simple_path
+        end
+        if bothways_indegree(dbg,abs(path[end]))==1
+            push!(simple_path,abs(path[end]))
+            return true,simple_path
+        else
+            return false,simple_path
+        end
+    end
+    return false
 end
 
 
 
 
-function canonical_bio(x::BioSequence{A})where{A}
-    y = reverse_complement(x)
-    return x < y ? x : y
-end
 
 """
     is_a_path2(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
@@ -365,7 +453,8 @@ function is_a_path2(seq::Sequence,dbg::DeBruijnGraph;min_match=3)
         match =  is_suffix2(seq,nodes_[i],direction=1,min_match=min_match)
         match_rev = is_suffix2(seq,nodes_[i],direction=-1,min_match=min_match)
         if match == Base.length(seq) || match_rev == Base.length(seq)
-            return true, i
+            push!(indexes,i)
+            return true, indexes
         end
 
         if match!=-1
