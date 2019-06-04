@@ -156,12 +156,18 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
 
         if canonical(pref) == pref ## add prefix to forward nodes
             push!(fw_nodes,(pref,i))
+            if pref == reverse_complement(pref)
+                push!(bw_nodes,(pref,i))
+            end
         else
             push!(bw_nodes,(canonical(pref),i))
         end
         a = 1
         if canonical(suf) == suf ## add suffix to backward nodes (outgoing edge)
             push!(bw_nodes,(suf,-i))
+            if suf == reverse_complement(suf)
+                push!(fw_nodes,(suf,-i))
+            end
         else
             push!(fw_nodes,(canonical(suf),-i))
         end
