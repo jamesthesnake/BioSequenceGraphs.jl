@@ -123,8 +123,11 @@ end
 
 
 """
-    new_deBruijn_Constructor(kmer_vector::Vector{Kmer{T,K}})where{T,K}
+    new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
 
+Input :  a set of kmers in their canonical form
+
+(canonical_kmer_set function under kmer.jl can be used for creating the set out of an array of kmers)
 
 Returns a dbg consisting of a vector of SequenceGraphNodes, a vector of SequenceGraphLinks and an integer k for the kmer length
 
@@ -133,7 +136,7 @@ We define the beginning of the canonical form of the kmer as the (+) end
 And end of the canonical form as the (-) ends
 
 """
-function new_deBruijn_Constructor(kmer_vector::Vector{Kmer{T,K}})where{T,K}
+function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
     fw_nodes = Vector{Tuple{Kmer{T,K-1},Int64}}()
     bw_nodes = Vector{Tuple{Kmer{T,K-1},Int64}}()
 
@@ -143,31 +146,22 @@ function new_deBruijn_Constructor(kmer_vector::Vector{Kmer{T,K}})where{T,K}
     i = 1
     flag = 0
     ## adding unique kmers to graph in their canonical form
-    for kmer in kmer_vector
-        for node in nodes
-            if canonical(kmer) == sequence(node) ## now assuming only kmers are inserted during construction
-                flag = 1
-                break
-            end
+    for kmer in kmer_set
+        can_kmer = canonical(kmer)
+        push!(nodes,SequenceGraphNode(can_kmer,true))
+        pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
+        suf = Kmer{T,K-1}(String(can_kmer)[2:end])
+        if canonical(pref) == pref ## add prefix to forward nodes
+            push!(fw_nodes,(pref,i))
+        else
+            push!(bw_nodes,(canonical(pref),i))
         end
-        if flag == 0 ## new kmer
-            can_kmer = canonical(kmer)
-            push!(nodes,SequenceGraphNode(can_kmer,true))
-            pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
-            suf = Kmer{T,K-1}(String(can_kmer)[2:end])
-            if canonical(pref) == pref ## add prefix to forward nodes
-                push!(fw_nodes,(pref,i))
-            else
-                push!(bw_nodes,(canonical(pref),i))
-            end
-            a = 1
-            if canonical(suf) == suf ## add suffix to backward nodes (outgoing edge)
-                push!(bw_nodes,(suf,-i))
-            else
-                push!(fw_nodes,(canonical(suf),-i))
-            end
+        a = 1
+        if canonical(suf) == suf ## add suffix to backward nodes (outgoing edge)
+            push!(bw_nodes,(suf,-i))
+        else
+            push!(fw_nodes,(canonical(suf),-i))
         end
-        flag = 0
         i= i + 1
     end
 
