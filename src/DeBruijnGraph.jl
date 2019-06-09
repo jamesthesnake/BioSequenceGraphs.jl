@@ -183,7 +183,7 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         end
         i= i + 1
     end
-    prev = last(bw_nodes[1])
+    prev = abs(last(bw_nodes[1]))
     links_ = Vector{SequenceGraphLink}()
     for kbn in bw_nodes
         if abs(last(kbn))!=prev
@@ -261,8 +261,46 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
 end
 
 
+# Simple path finders for unitigging
+# -----
+
+"""
 
 
+At the moment produces an extra singleton at the beginning...  will fix it.
+
+
+The main idea is that there  can be  at most 1  simple path originating from each node   with outdegree 1
+
+So an exhaustive search is not very expensive if we only look at nodes with incoming > 1 or  incoming == 0 and out==1
+Looking at nodes with incoming >  1 will give us the maximal unitigs
+On the other hand, looking at nodes with outgoing = 1 will give all simple paths
+"""
+
+function simple_path_finder(dbg)
+    simple_path = Vector()
+    links1 = links(dbg)
+    for node_id in 1:Base.length(nodes(dbg))
+        path = Vector()
+        parent = node_id
+        flag = true
+        while bothways_outdegree(dbg,node_id)==1 && (bothways_indegree(dbg,node_id)<2) && flag
+            for link in links1[node_id]
+                child = abs(destination(link))
+                print("Parent $parent Child $child")
+                if bothways_indegree(dbg,child)==1
+                    push!(path,child)
+                    node_id = child
+                end
+            end
+            if node_id == parent
+                flag =   false
+            end
+        end
+        push!(simple_path,path)
+    end
+    simple_path
+end
 
 
 # Query Functions
