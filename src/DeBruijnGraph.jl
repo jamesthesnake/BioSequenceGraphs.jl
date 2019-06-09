@@ -265,12 +265,13 @@ end
 # -----
 
 """
+    simple_path_finder(dbg)
 
+Returns a list of paths which correspond to unitigs that can not be further extended
 
-At the moment produces an extra singleton at the beginning...  will fix it.
+More testing is necessary
 
-
-The main idea is that there  can be  at most 1  simple path originating from each node   with outdegree 1
+The main idea is that there  can be  at most 1  simple path originating from each node with outdegree 1
 
 So an exhaustive search is not very expensive if we only look at nodes with incoming > 1 or  incoming == 0 and out==1
 Looking at nodes with incoming >  1 will give us the maximal unitigs
@@ -284,20 +285,23 @@ function simple_path_finder(dbg)
         path = Vector()
         parent = node_id
         flag = true
-        while bothways_outdegree(dbg,node_id)==1 && (bothways_indegree(dbg,node_id)<2) && flag
-            for link in links1[node_id]
-                child = abs(destination(link))
-                print("Parent $parent Child $child")
-                if bothways_indegree(dbg,child)==1
-                    push!(path,child)
-                    node_id = child
-                end
+
+        ## start of a maximal unitig in_degree >2 or 0 and out_degree ==1
+        if (bothways_indegree(dbg,node_id)==0 || bothways_indegree(dbg,node_id)>1 )&& bothways_outdegree(dbg,node_id)==1
+            push!(path,parent)
+            parent = abs(destination(links1[node_id][1]))
+            while bothways_outdegree(dbg,parent)==1 && (bothways_indegree(dbg,node_id)==1)
+                push!(path,parent)
+                parent = abs(destination(links1[parent][1]))
             end
-            if node_id == parent
-                flag =   false
+
+            ## if the indegree==1 extend the path to include the final kmer at then end of the path
+            ## o/w skip
+            if bothways_indegree(dbg,parent)==1
+                push!(path,parent)
             end
+            push!(simple_path,path)
         end
-        push!(simple_path,path)
     end
     simple_path
 end
