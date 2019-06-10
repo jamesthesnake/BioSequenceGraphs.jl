@@ -4,8 +4,8 @@
 """
 
 struct DeBruijnGraph
-    nodes::Vector{SequenceGraphNode}
-    links::Vector{Vector{SequenceGraphLink}}
+    nodes::Dict{Int64,SequenceGraphNode}
+    links::Dict{Int64,Vector{SequenceGraphLink}}
     k ::Int
 end
 
@@ -129,6 +129,7 @@ function add_node!(dbg::DeBruijnGraph,n::SequenceGraphNode)
 end
 
 
+
 """
     new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
 
@@ -202,7 +203,13 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         prev = abs(last(kbn))
     end
     push!(links,links_)
-    dbg = DeBruijnGraph(nodes,links,K)
+    nodes_new = Dict{Int64,SequenceGraphNode}()
+    links_new = Dict{Int64,Vector{SequenceGraphLink}}()
+    for (node_id,node) in enumerate(nodes)
+        nodes_new[node_id] = node
+        links_new[node_id] = links[node_id]
+    end
+    dbg = DeBruijnGraph(nodes_new,links_new,K)
 end
 
 
@@ -290,7 +297,7 @@ function simple_path_finder(dbg)
         if (bothways_indegree(dbg,node_id)==0 || bothways_indegree(dbg,node_id)>1 )&& bothways_outdegree(dbg,node_id)==1
             push!(path,parent)
             parent = abs(destination(links1[node_id][1]))
-            while bothways_outdegree(dbg,parent)==1 && (bothways_indegree(dbg,node_id)==1)
+            while bothways_outdegree(dbg,parent)==1 && bothways_indegree(dbg,parent)==1
                 push!(path,parent)
                 parent = abs(destination(links1[parent][1]))
             end
@@ -300,6 +307,8 @@ function simple_path_finder(dbg)
             if bothways_indegree(dbg,parent)==1
                 push!(path,parent)
             end
+            println("Maximal path found!")
+            println(path)
             push!(simple_path,path)
         end
     end
