@@ -280,6 +280,14 @@ Simply concatenate each sequence on the path to a single sequence
 Delete old intermediate links and transfer the outgoing edges of the end node if any.
 
 """
+"""
+    merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
+
+Returns a sequence for now unfinished
+Gets as input a dbg and a list of lists where each list contain > 0 nodeID's representing the nodes on the simple path
+Simply concatenate each sequence on the path to a single sequence
+
+"""
 function merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
     overlap = dbg.k - 1
     nodes_ = nodes(dbg)
@@ -287,6 +295,9 @@ function merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
     for path in simple_paths
         last_ind = path[1]
         ## find the new node label
+        if Base.length(path)==1
+            continue
+        end
         if path[1] > 0
             seq = reverse_complement(sequence(nodes_[abs(path[1])]))
         else
@@ -351,11 +362,13 @@ function simple_path_finder(dbg)
 
         ## start of a maximal unitig in_degree >2 or 0 and out_degree ==1
         if (bothways_indegree(dbg,node_id)==0 || bothways_indegree(dbg,node_id)>1 )&& bothways_outdegree(dbg,node_id)==1
-            push!(path,parent)
-            parent = abs(destination(links1[node_id][1]))
+            sign1 = sign(source(links1[node_id][1]))
+            push!(path,sign1*parent)
+            parent = destination(links1[node_id][1])
             while bothways_outdegree(dbg,parent)==1 && bothways_indegree(dbg,parent)==1
+                sign1 = sign(source(links1[parent][1]))
                 push!(path,parent)
-                parent = abs(destination(links1[parent][1]))
+                parent = destination(links1[parent][1])
             end
 
             ## if the indegree==1 extend the path to include the final kmer at then end of the path
