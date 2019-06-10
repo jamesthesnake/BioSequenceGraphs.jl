@@ -268,6 +268,73 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
 end
 
 
+# Path merging
+
+"""
+    merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
+
+Returns the updated dbg
+
+Gets as input a dbg and a list of lists where each list contain > 0 nodeID's representing the nodes on the simple path
+Simply concatenate each sequence on the path to a single sequence
+Delete old intermediate links and transfer the outgoing edges of the end node if any.
+
+"""
+"""
+    merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
+
+Returns a sequence for now unfinished
+Gets as input a dbg and a list of lists where each list contain > 0 nodeID's representing the nodes on the simple path
+Simply concatenate each sequence on the path to a single sequence
+
+"""
+function merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
+    overlap = dbg.k - 1
+    nodes_ = nodes(dbg)
+    links_ = links(dbg)
+    for path in simple_paths
+        last_ind = path[1]
+        ## find the new node label
+        if Base.length(path)==1
+            continue
+        end
+        if path[1] > 0
+            seq = reverse_complement(sequence(nodes_[abs(path[1])]))
+        else
+            seq = sequence(nodes_[abs(path[1])])
+        end
+        new_seq = BioSequence{alp}(seq)
+        for nodeid in path[2:end-1]
+            if nodeid < 0
+                seq = reverse_complement(sequence(nodes_[abs(nodeid)]))
+            else
+                seq = sequence(nodes_[abs(nodeid)])
+            end
+            seq = sub_seq(seq,overlap+1)
+            new_seq = BioSequence{alp}(new_seq, seq)
+            delete!(nodes_,abs(nodeid))
+            delete!(links_,abs(nodeid))
+            last_ind = nodeid
+        end
+        last_ind = path[end]##keep the links of the last node
+        if last_ind < 0
+            seq = reverse_complement(sequence(nodes_[abs(last_ind)]))
+        else
+            seq = sequence(nodes_[abs(last_ind)])
+        end
+        seq = sub_seq(seq,overlap+1)
+        new_seq = BioSequence{alp}(new_seq, seq)
+        nodes_[abs(path[1])] = SequenceGraphNode(new_seq,true)
+        delete!(nodes_,abs(last_ind))
+        ## find the new links
+        for link in links(dbg)[abs(last_ind)]
+            push!(links_[abs(path[1])],SequenceGraphLink(path[1],destination(link),distance(link)))
+        end
+        delete!(links_,abs(last_ind))
+    end
+    dbg
+end
+
 # Simple path finders for unitigging
 # -----
 
@@ -295,11 +362,13 @@ function simple_path_finder(dbg)
 
         ## start of a maximal unitig in_degree >2 or 0 and out_degree ==1
         if (bothways_indegree(dbg,node_id)==0 || bothways_indegree(dbg,node_id)>1 )&& bothways_outdegree(dbg,node_id)==1
-            push!(path,parent)
-            parent = abs(destination(links1[node_id][1]))
+            sign1 = sign(source(links1[node_id][1]))
+            push!(path,sign1*parent)
+            parent = destination(links1[node_id][1])
             while bothways_outdegree(dbg,parent)==1 && bothways_indegree(dbg,parent)==1
+                sign1 = sign(source(links1[parent][1]))
                 push!(path,parent)
-                parent = abs(destination(links1[parent][1]))
+                parent = destination(links1[parent][1])
             end
 
             ## if the indegree==1 extend the path to include the final kmer at then end of the path
