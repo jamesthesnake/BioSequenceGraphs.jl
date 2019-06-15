@@ -280,14 +280,6 @@ Simply concatenate each sequence on the path to a single sequence
 Delete old intermediate links and transfer the outgoing edges of the end node if any.
 
 """
-"""
-    merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
-
-Returns a sequence for now unfinished
-Gets as input a dbg and a list of lists where each list contain > 0 nodeID's representing the nodes on the simple path
-Simply concatenate each sequence on the path to a single sequence
-
-"""
 function merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
     overlap = dbg.k - 1
     nodes_ = nodes(dbg)
