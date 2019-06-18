@@ -17,3 +17,12 @@ is_forward_link(l::SequenceGraphLink, n::NodeID) = source(l) == n
 @inline function Base.isequal(a::SequenceGraphLink, b::SequenceGraphLink)
     return source(a) == source(b) && destination(a) == destination(b)
 end
+
+
+function find_link_index(links_vec::Vector{SequenceGraphLink},nodeid)
+    for (i,link) in enumerate(links_vec)
+        if destination(link) == nodeid
+            return i
+        end
+    end
+end

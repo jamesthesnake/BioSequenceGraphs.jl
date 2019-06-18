@@ -267,6 +267,30 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
     deBruijn_Graph
 end
 
+# Kmer Enumeration
+"""
+    extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)where{A}
+
+    Return a set of unique kmers in their canonical form which will be used to generate the dbg from a set of read_set
+
+    Input: A set of reads (BioSequences)
+
+"""
+function extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)where{A}
+    T = Base.eltype(A)
+    kmer_set = Set{Kmer{T,k}}()
+    for seq in read_set
+        start = 1
+        fin = start+k-1
+        while fin <= Base.length(seq)
+            kmer = canonical(Kmer{T,k}(BioSequence{A}(seq,start:fin)))
+            push!(kmer_set,kmer)
+            start +=1
+            fin +=1
+        end
+    end
+    return kmer_set
+end
 
 # Path merging
 
@@ -284,7 +308,7 @@ function merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
     overlap = dbg.k - 1
     nodes_ = nodes(dbg)
     links_ = links(dbg)
-    for path in simple_paths
+    for path in simple_paths## list of simple paths as nodeids (with direction)
         last_ind = path[1]
         ## find the new node label
         if Base.length(path)==1
@@ -296,6 +320,12 @@ function merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
             seq = sequence(nodes_[abs(path[1])])
         end
         new_seq = BioSequence{alp}(seq)
+
+        ## remove outgoing edge from the start node to next path
+        next_node = path[2]
+        link_index = find_link_index(links_[abs(path[1])],next_node) ## can be used if we force removal of a non-simple path
+        deleteat!(links_[abs(path[1])],1)
+
         for nodeid in path[2:end-1]
             if nodeid < 0
                 seq = reverse_complement(sequence(nodes_[abs(nodeid)]))
