@@ -267,6 +267,43 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
     deBruijn_Graph
 end
 
+
+
+# Kmer Enumeration
+"""
+    new_extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)where{A}
+
+    Return a set of unique kmers in their canonical form which will be used to generate the dbg from a set of read_set
+
+    Input: A set of reads (BioSequences)
+
+    Faster way of getting all kmers using the kmer iterators in eachkmer.jl
+
+"""
+## this is the new version of extracting canonical kmers
+## we use the kmer iterators instead of manually extracting each kmer
+function new_extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)where{A}
+    T = eltype(A)
+    kmer_set = Set{Kmer{T,k}}()
+    for seq in read_set
+        kmer_iterator = each(Kmer{T,k},seq)
+        kmer_state = iterate(kmer_iterator) ## initialize
+        print(kmer_state)
+        while kmer_state!=nothing
+            kmer = kmer_state[1][2]
+            println(kmer)
+            push!(kmer_set,kmer)
+            start_ind = kmer_state[1][1]
+            new_state= (start_ind,1,UInt64(0))
+            kmer_state = iterate(kmer_iterator,new_state)
+        end
+
+    end
+    return kmer_set
+end
+
+
+
 # Kmer Enumeration
 """
     extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)where{A}
@@ -274,6 +311,8 @@ end
     Return a set of unique kmers in their canonical form which will be used to generate the dbg from a set of read_set
 
     Input: A set of reads (BioSequences)
+
+    Very slow way of getting all kmers
 
 """
 function extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)where{A}
