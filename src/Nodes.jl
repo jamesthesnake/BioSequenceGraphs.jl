@@ -26,7 +26,7 @@ isactive(sn::SequenceGraphNode) = sn.active
 
 reverse_complement!(sn::SequenceGraphNode) = reverse_complement!(sequence(sn))
 
-length(sn::SequenceGraphNode) = Base.length(sequence(sn))
+Base.length(sn::SequenceGraphNode) = Base.length(sequence(sn))
 
 function iscanonical(seq::BioSequence{DNAAlphabet{2}})
     i = 1
