@@ -8,6 +8,6 @@ include("Nodes.jl")
 include("Links.jl")
 include("SequenceGraph.jl")
 include("IO.jl")
-#include("DeBruijnGraph.jl")
+include("DeBruijnGraph.jl")
 #include("GFA1/GFA1.jl")
 end # module BioSequenceGraphs

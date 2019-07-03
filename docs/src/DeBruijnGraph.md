@@ -28,6 +28,28 @@ DeBruijnGraph(SequenceGraphNode[SequenceGraphNode{Kmer{DNA,4}}(CGCC, true), Sequ
 ```
 
 
+We can use the fastq readers to work on real data. The example below generates the set of unique kmers from 5-long reads.
+The kmer size is set to 15.
+
+
+```
+r = FASTQ.Reader(open("URnano_ecoli.fastq", "r"))
+Ecoli_reads = Set{BioSequence{DNAAlphabet{4}}}()
+
+## get first 5 reads
+for i in 1:5
+    next_seq = iterate(r)
+    seq = sequence(next_seq[1])
+    next_seq = iterate(r,next_seq[2])
+    push!(Ecoli_reads,seq)
+end
+kmers = new_extract_canonical_kmers(Ecoli_reads,15)
+```
+
+The output is a set of kmers in their canonical form:
+
+Set(Kmer{DNA,15}[AAAATATCTCGTTTT, TAAACCAGTCGCCGC, TTCGACATTACCCAG, CGCCCTGCCAGCAGT, TAATATTGTTCCATT, TGGTAATGGTCACAG, AAAAATTAAGCAGGA, ATATAAGTTATATCA, GCCCGATCTGTCTCC, GATTTCTCCGGGCCA  …  TGAGCGATTGCCTGA, CGGAGCAGCAGTGTC, AAAATCGTACATACC, GTCGCCTGATGCCTG, GTCAGCGAACCTTCC, CGCCGCTCACCGCCG, TGGATGAACGTTCAT, AATATGTCACAATTT, ATGCGATAGCAGGGG, GTAGAAAGCTCGTGG, CGATTGGTTTAAGAC])
+
 
 Example data for checking node merging :
 

@@ -302,6 +302,71 @@ function new_extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)wher
     return kmer_set
 end
 
+## Error Correction !!!
+# Very important step for contig formalization
+
+
+"""
+    get_parents(node_id::Int64,dbg::DeBruijnGraph)
+
+returns the list of node_ids who has outgoing edges to the query nodes
+
+Exhaustive search over all links on the DBG
+We need a faster way of implementing this query
+"""
+
+function get_parents(node_id::Int64,dbg::DeBruijnGraph)
+    parents = Vector{Int64}()
+    for link_list in links(dbg)
+        for link in link_list[2]
+            if abs(destination(link))==node_id
+                push!(parents,abs(link_list[1]))
+            end
+        end
+    end
+    return parents
+end
+
+
+"""
+    delete_tips(dbg::DeBruijnGraph)
+
+deletes the dead-end tips in a dbg
+
+dead-end tip is defined as tips that have no outgoing edge and a single incoming edge.
+The source node of the incoming edge has multiple outgoing edges (hopefully two)
+candidates store all dead-end nodes.
+We check whether the other outgoing edge of the source node is also dead-end. We delete if it is not.
+"""
+function delete_tips(dbg::DeBruijnGraph)
+    candidates = Vector{Int64}()
+    for link in links(dbg)
+        if Base.length(link[2])==0
+            push!(candidates,link[1])
+        end
+    end
+    println("Candidates")
+    println(candidates)
+    to_be_removed = Vector{Int64}()
+    for cand in candidates
+        parents = get_parents(cand,dbg)
+        for parent in parents
+            if Base.length(links(dbg)[parent])>1
+                for link in links(dbg)[parent]
+                    if abs(destination(link))!=cand && !(abs(destination(link)) in candidates)
+                        push!(to_be_removed,cand)
+                    end
+                end
+            end
+        end
+    end
+    println("To be removed")
+    println(to_be_removed)
+    for i in to_be_removed
+        delete!(nodes(dbg2),abs(i))
+        delete!(links(dbg2),abs(i))
+    end
+end
 
 
 # Kmer Enumeration
@@ -343,7 +408,7 @@ Simply concatenate each sequence on the path to a single sequence
 Delete old intermediate links and transfer the outgoing edges of the end node if any.
 
 """
-function merge_simple_paths(dbg,simple_paths;alp=DNAAlphabet{4})
+function merge_simple_paths(dbg::DeBruijnGraph,simple_paths;alp=DNAAlphabet{4})
     overlap = dbg.k - 1
     nodes_ = nodes(dbg)
     links_ = links(dbg)
@@ -413,7 +478,7 @@ Looking at nodes with incoming >  1 will give us the maximal unitigs
 On the other hand, looking at nodes with outgoing = 1 will give all simple paths
 """
 
-function simple_path_finder(dbg)
+function simple_path_finder(dbg::DeBruijnGraph)
     simple_path = Vector()
     links1 = links(dbg)
     for node_id in 1:Base.length(nodes(dbg))
