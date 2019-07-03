@@ -67,8 +67,8 @@ destination(l::DistanceGraphLink) = l.destination
 distance(l::DistanceGraphLink) = l.dist
 
 "Test if link `l` is a forward link leaving node `n`."
-is_forward_from(l::DistanceGraphLink, n::NodeID) = source(l) == -n
-is_backward_from(l::DistanceGraphLink, n::NodeID) = source(l) == n
+is_forwards_from(l::DistanceGraphLink, n::NodeID) = source(l) == -n
+is_backwards_from(l::DistanceGraphLink, n::NodeID) = source(l) == n
 
 """
 The SequenceDistanceGraph is a representation of a genome assembly.
@@ -262,7 +262,7 @@ end
 Get a vector of the links leaving `n` forward from that node.
 """
 function forward_links(sg::SequenceDistanceGraph, n::NodeID)
-    r = Vector{Link}(0)
+    r = Vector{DistanceGraphLink}()
     nodelinks = links(sg, n)
     sizehint!(r, length(nodelinks))
     for link in nodelinks
@@ -287,11 +287,11 @@ backward_links(sg::SequenceDistanceGraph, n::NodeID) = forward_links(sg, -n)
 Find node IDs for forward nodes of `n`.
 """
 function get_next_nodes(sg::SequenceDistanceGraph, n::NodeID)
-    r = Vector{NodeID}(0)
+    r = Vector{NodeID}()
     nodelinks = links(sg, n)
     sizehint!(r, length(nodelinks))
     for link in nodelinks
-        if is_forward_from(link, n)
+        if is_forwards_from(link, n)
             push!(r, destination(link))
         end
     end
@@ -304,7 +304,7 @@ end
 Find node IDs for backward nodes of `n`.
 """
 function get_previous_nodes(sg::SequenceDistanceGraph, n::NodeID)
-    r = Vector{NodeID}(0)
+    r = Vector{NodeID}()
     nodelinks = links(sg, n)
     sizehint!(r, length(nodelinks))
     for link in nodelinks
@@ -314,6 +314,16 @@ function get_previous_nodes(sg::SequenceDistanceGraph, n::NodeID)
     end
 end
 
+#=
+function find_tips(sg::SequenceDistanceGraph)
+    r = Vector{NodeID}()
+    for l in links(sg)
+        if length(l) == 1
+            d = destination(l[1])
+            for ol in links(sg, d)
+                
+end
+=#
 
 # TODO: We might want to move this function to the BioSequences.jl in the future.
 function mer_prefix(mer::DNAKmer{K}) where {K}
