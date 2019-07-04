@@ -87,7 +87,7 @@ end
     find_overlaps(dbg::DeBruijnGraph,n::SequenceGraphNode)
 
 Returns a list of tuples which will be used to add links to the DeBruijnGraph
-finds the overlaps between a node and all nodes in a dbg of length k-1
+finds the overlaps  of length k-1 between a node and all nodes in a dbg
 """
 function find_overlaps(dbg::DeBruijnGraph,n::SequenceGraphNode,k::Int)
     nodeid = Base.length(dbg.nodes)+1
@@ -155,7 +155,6 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
     flag = 0
     ## adding unique kmers to graph in their canonical form
     for kmer in kmer_set
-        println(kmer)
         can_kmer = canonical(kmer)
         push!(nodes,SequenceGraphNode(can_kmer,true))
         pref = Kmer{T,K-1}(String(can_kmer)[1:end-1])
@@ -196,7 +195,6 @@ function new_deBruijn_Constructor(kmer_set::Set{Kmer{T,K}})where{T,K}
         end
         for kfn in fw_nodes
             if first(kfn)==first(kbn)
-                print()
                 push!(links_,SequenceGraphLink(last(kbn),last(kfn),-K+1)) ## i did not quiet get -k+1
             end
         end
@@ -288,10 +286,8 @@ function new_extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)wher
     for seq in read_set
         kmer_iterator = each(Kmer{T,k},seq)
         kmer_state = iterate(kmer_iterator) ## initialize
-        print(kmer_state)
         while kmer_state!=nothing
             kmer = kmer_state[1][2]
-            println(kmer)
             push!(kmer_set,kmer)
             start_ind = kmer_state[1][1]
             new_state= (start_ind,1,UInt64(0))
