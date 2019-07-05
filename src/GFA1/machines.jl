@@ -121,3 +121,7 @@ end
 
 link.actions[:enter] = [:mark]
 link.actions[:exit] = [:link]
+
+macro re_str(line)
+    return line
+end

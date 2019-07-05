@@ -22,7 +22,7 @@ end
 """
     get_paired_end_reads(seqs::Set{S})where S <: BioSequences.Sequence
 
-
+    
 For testing purposes we generate some paired_end reads by masking the middle part of some reads
 We represent paired-end reads as a tuple of two biosequences and an integer range representing the possible distance
 
