@@ -1,68 +1,4 @@
 ###
-### Old DBG construction from set of Kmers
-###
-
-# TODO: We might want to move this function to the BioSequences.jl in the future.
-function mer_prefix(mer::DNAKmer{K}) where {K}
-    return DNAKmer{K - 1}(UInt64(mer) >> 2)
-end
-
-# TODO: We might want to move this function to the BioSequences.jl in the future.
-function mer_suffix(mer::DNAKmer{K}) where {K}
-    return DNAKmer{K - 1}(UInt64(mer))
-end
-
-function new_dbg_from_kmerset(kmers::Set{DNAKmer{K}}) where {K}
-    canonical_kmers = Set{DNAKmer{K}}(canonical(mer) for mer in kmers)
-
-    kmer_ovl_bw_nodes = Vector{Tuple{DNAKmer{K-1}, Int64}}()
-    kmer_ovl_fw_nodes = Vector{Tuple{DNAKmer{K-1}, Int64}}()
-
-    sg = SequenceDistanceGraph{DNAKmer{K}}()
-
-    for mer in canonical_kmers
-        # Add the canonical kmer to the nodes of the graph, and note it's ID.
-        nodeid = add_node!(sg, mer)
-        # Take the prefix (k-1) of the canonical kmer.
-        pre = mer_prefix(mer)
-        # If the prefix is canonical, push the tuple (canonical(prefix), +nodeid) to `kmer_ovl_fw_nodes`.
-        # Else push the tuple(canonical(prefix), +nodeid) to the `kmer_ovl_bw_nodes`.
-        prerc = reverse_complement(pre)
-        if pre < prerc
-            push!(kmer_ovl_fw_nodes, (pre, nodeid))
-        else
-            push!(kmer_ovl_bw_nodes, (prerc, nodeid))
-        end
-        
-        # Take the suffix (k-1) of the canonical kmer.
-        suf = mer_suffix(mer)
-        # If the suffix is canonical, push the tuple (canonical(suffix), -nodeid) to `kmer_ovl_bw_nodes`.
-        # Else push the tuple (canonical(suffix), - nodeid) to `kmer_ovl_fw_nodes`.
-        sufrc = reverse_complement(suf)
-        if suf < sufrc
-            push!(kmer_ovl_bw_nodes, (suf, -nodeid))
-        else
-            push!(kmer_ovl_fw_nodes, (sufrc, -nodeid))
-        end
-    end
-    
-    # Sort `kmer_ovl_fw_nodes` & `kmer_ovl_bw_nodes`.
-    sort!(kmer_ovl_fw_nodes)
-    sort!(kmer_ovl_bw_nodes)
-    
-    for kbn in kmer_ovl_bw_nodes
-        for kfn in kmer_ovl_fw_nodes
-            if first(kbn) == first(kfn)
-                # Add a link to graph with source = last(kbn), destination = last(kfn) and distance = -k + 1
-                add_link!(sg, last(kbn), last(kfn), -K + 1)
-            end
-        end
-    end
-    
-    return sg
-end
-
-###
 ### New unitig graph construction straight from a set of kmers
 ###
 
@@ -128,9 +64,11 @@ end
 function is_end_bw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     next = Vector{Kidx{K}}()
     get_bw_idxs!(next, mer, merlist)
+    @debug "is_end_bw: bw idxes:" mer next
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_fw_idxs!(next, p, merlist)
+    @debug "is_end_bw: fw idxes:" p next
     length(next) != 1 && return true
     return false
 end
@@ -138,9 +76,11 @@ end
 function is_end_fw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     next = Vector{Kidx{K}}()
     get_fw_idxs!(next, mer, merlist)
+    @debug "is_end_fw: fw idxes:" mer next
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_bw_idxs!(next, p, merlist)
+    @debug "is_end_fw: bw idxes" p next
     length(next) != 1 && return true
     return false
 end
@@ -185,9 +125,12 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
         start_kmer = kmerlist[start_kmer_idx]
         end_bw = is_end_bw(start_kmer, kmerlist)
         end_fw = is_end_fw(start_kmer, kmerlist)
+        
         if !end_bw && !end_fw
             continue
         end
+        
+        
         
         if end_bw && end_fw
             # Kmer as unitig
@@ -219,7 +162,12 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
             end
         end
         add_node!(sg, canonical!(s))
-    end 
+    end
+    
+    # A temporary check for circle problem for now.
+    if !all(used_kmers)
+        @warn "Some kmers have not been incorporated into contigs. This may be a case of the circle problem" kmerlist[(!).(used_kmers)]
+    end
     
     @info "Linking unitigs by their overlaps"
     
