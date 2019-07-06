@@ -89,15 +89,37 @@ struct Kidx{K}
     idx::UInt64
 end
 
+encoded_data(mer) = reinterpret(UInt64, mer)
+
+function iscanonical(seq::BioSequence{DNAAlphabet{2}})
+    i = 1
+    j = length(seq)
+    @inbounds while i <= j
+        f = seq[i]
+        r = complement(seq[j])
+        f < r && return true
+        r < f && return false
+        i += 1
+        j -= 1
+    end
+    return true
+end
+
+function canonical!(seq::BioSequence{DNAAlphabet{2}})
+    if !iscanonical(seq)
+        reverse_complement!(seq)
+    end
+end
+
 # TODO: Update BioSequences with new neighbour iterators instead.
 function kmer_fw_neighbours(mer::DNAKmer{K}) where {K}
-    d = BioSequences.encoded_data(mer)
+    d = encoded_data(mer)
     base = d << 2
     return (DNAKmer{K}(base), DNAKmer{K}(base + 0x01), DNAKmer{K}(base + 0x02), DNAKmer{K}(base + 0x03))
 end
 
 function kmer_bw_neighbours(mer::DNAKmer{K}) where {K}
-    d = BioSequences.encoded_data(mer)
+    d = encoded_data(mer)
     base = d >> 2
     BT = typeof(base)
     return (DNAKmer{K}(base), DNAKmer{K}(base + (BT(1) << 2(K - 1))), DNAKmer{K}(base + (BT(2) << 2(K - 1))), DNAKmer{K}(base + (BT(3) << 2(K - 1))))

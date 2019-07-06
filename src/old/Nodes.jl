@@ -27,26 +27,6 @@ reverse_complement!(sn::SequenceGraphNode) = reverse_complement!(sequence(sn))
 
 Base.length(sn::SequenceGraphNode) = Base.length(sequence(sn))
 
-function iscanonical(seq::BioSequence{DNAAlphabet{2}})
-    i = 1
-    j = length(seq)
-    @inbounds while i < j
-        f = seq[i]
-        r = complement(seq[j])
-        f < r && return true
-        r < f && return false
-        i += 1
-        j -= 1
-    end
-    return true
-end
-
-function canonical!(seq::BioSequence{DNAAlphabet{2}})
-    if !iscanonical(seq)
-        reverse_complement!(seq)
-    end
-end
-
 iscanonical(sn::SequenceGraphNode) = iscanonical(sequence(sn))
 
 
