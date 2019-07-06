@@ -19,7 +19,6 @@ struct SequenceGraphNode{S <:Sequence}
     active::Bool
 end
 
-
 sequence(sn::SequenceGraphNode) = sn.sequence
 
 isactive(sn::SequenceGraphNode) = sn.active
@@ -40,6 +39,12 @@ function iscanonical(seq::BioSequence{DNAAlphabet{2}})
         j -= 1
     end
     return true
+end
+
+function canonical!(seq::BioSequence{DNAAlphabet{2}})
+    if !iscanonical(seq)
+        reverse_complement!(seq)
+    end
 end
 
 iscanonical(sn::SequenceGraphNode) = iscanonical(sequence(sn))
