@@ -299,4 +299,40 @@ function find_tips(sg::SequenceDistanceGraph)
 end
 =#
 
+function dump_to_gfa1(sg, filename)
+    fasta_filename = "$filename.fasta"
+    gfa = open("$filename.gfa", "w")
+    fasta = open(FASTA.Writer, fasta_filename)
+    
+    println(gfa, "H\tVN:Z:1.0")
+    
+    for nid for eachindex(nodes(sg))
+        n = node(sg, nid)
+        if n.deleted
+            continue
+        end
+        println(gfa, "S\tseq", nid, "\tLN:i:", length(n.seq), "\tUR:Z:", fasta_filename)
+    end
+    
+    for ls in links(sg)
+        for l in ls
+            if source(l) <= destination(l)
+                print(gfa, "L\t")
+                if source(l) > 0
+                    print(gfa, "seq", source(l), "\t-\t")
+                else
+                    print(gfa, "seq", -source(l), "\t+\t")
+                end
+                if destination(l) > 0
+                    print(gfa, "seq", destination(l), "\t+\t")
+                else
+                    print(gfa, "seq", -destination(l), "\t-\t")
+                end
+                println(gfa, distance(l) < 0 ? -distance(l) : 0, "M")
+            end
+        end
+    end
+    
+end
+
 
