@@ -64,25 +64,27 @@ function kmer_bw_neighbours(mer::DNAKmer{K}) where {K}
 end
 
 function is_end_bw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
+    @debug "Checking if kmer is end BW" mer
     next = Vector{Kidx{K}}()
     get_bw_idxs!(next, mer, merlist)
-    @debug "is_end_bw: bw idxes:" mer next
+    @debug "BW neighbours:" next
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_fw_idxs!(next, p, merlist)
-    @debug "is_end_bw: fw idxes:" p next
+    @debug "FW neighbours of only BW neighbour:" p next
     length(next) != 1 && return true
     return false
 end
 
 function is_end_fw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
+    @debug "Checking if kmer is end FW" mer
     next = Vector{Kidx{K}}()
     get_fw_idxs!(next, mer, merlist)
-    @debug "is_end_fw: fw idxes:" mer next
+    @debug "FW neighbours:" next
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_bw_idxs!(next, p, merlist)
-    @debug "is_end_fw: bw idxes" p next
+    @debug "BW neighbours of only FW neighbour:" p next
     length(next) != 1 && return true
     return false
 end
