@@ -181,10 +181,10 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
     return sg
 end
 
-function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
-    @info "Linking unitigs by their overlaps"
-    
+function find_unitig_overlaps(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
+    @info string("Identifying the ", K - 1, "bp (K - 1) overlaps between unitigs")
     # Save the (k-1)mer in (rev on first k-1 / fw on last k-1) or out ( fw on first k-1 / bw on last k-1)
+    @debug "Saving K - 1 overlaps to `in` or `out`"
     in = Vector{Tuple{DNAKmer{K-1},NodeID}}()
     out = Vector{Tuple{DNAKmer{K-1},NodeID}}()
     sizehint!(in, length(nodes(sg)))
@@ -192,20 +192,32 @@ function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where 
     for nid in eachindex(nodes(sg))
         nodeseq = node(sg, nid).seq
         firstmer = DNAKmer{K-1}(nodeseq[1:K - 1])
+        @debug string("Considering node ", nid) nodeseq
         if iscanonical(firstmer)
+            @debug "Source overlap is canonical"
             push!(in, (firstmer, nid))
         else
+            @debug "Source overlap is not canonical"
             push!(out, (reverse_complement(firstmer), nid))
         end
         lastmer = DNAKmer{K-1}(nodeseq[end - (K - 2):end])
         if iscanonical(lastmer)
+            @debug "Sink overlap is canonical"
             push!(out, (lastmer, -nid))
         else
-            push!(out, (reverse_complement(lastmer), -nid))
+            @debug "Sink overlap is not canonical"
+            push!(in, (reverse_complement(lastmer), -nid))
         end
     end
     sort!(in)
     sort!(out)
+    return in, out
+end
+
+
+
+function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
+    @info string("Linking ", length(nodes(sg)), " unitigs by their ", K - 1, "bp (K - 1) overlaps")
     
     # Connect all out -> in for all combinations on each kmer.
     next_out_idx = 1
@@ -225,12 +237,11 @@ end
 
 
 function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
+    str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
+    @info string('C', str)
     sg = GRAPH_TYPE()
-    
     build_unitigs_from_kmerlist!(sg, kmerlist)
-    
-    
-    
-    @info string("Done constructing Sequence Graph from ", length(kmerlist), " ", K, "-mers")
+    connect_unitigs_by_overlaps!(sg, DNAKmer{K})
+    @info string("Done c", str)
     return sg
 end
