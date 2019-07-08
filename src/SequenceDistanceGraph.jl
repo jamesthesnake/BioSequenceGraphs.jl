@@ -104,6 +104,8 @@ function SequenceDistanceGraph{S}() where {S<:Sequence}
     return SequenceDistanceGraph{S}(Vector{SDGNode{S}}(), Vector{Vector{DistanceGraphLink}}())
 end
 
+n_nodes(sg::SequenceDistanceGraph) = length(nodes(sg))
+
 # Graph accessor functions
 # ------------------------
 

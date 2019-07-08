@@ -115,15 +115,12 @@ const GRAPH_TYPE = SequenceDistanceGraph{BioSequence{DNAAlphabet{2}}}
 
 function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K}}) where {K}
     @info string("Constructing unitigs from ", length(kmerlist), " ", K, "-mers")
-    #sg = SequenceDistanceGraph{BioSequence{DNAAlphabet{2}}}()
     used_kmers = falses(length(kmerlist))
-    #bw = Vector{Kidx{K}}()
-    #fw = Vector{Kidx{K}}()
+    
     for start_kmer_idx in eachindex(kmerlist)
-        # Any kmer can only occur in one unitig.
-        
         @debug "Considering new kmer" start_kmer_idx
         
+        # Any kmer can only occur in one unitig.
         if used_kmers[start_kmer_idx]
             @debug "Kmer has been used" start_kmer_idx
             continue
@@ -177,14 +174,14 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
     if !all(used_kmers)
         @warn "Some kmers have not been incorporated into unitigs. This may be a case of the circle problem" kmerlist[(!).(used_kmers)]
     end
-    @info string("Constructed ", length(nodes(sg)), "unitigs")
+    @info string("Constructed ", length(nodes(sg)), " unitigs")
     return sg
 end
 
 function find_unitig_overlaps(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
-    @info string("Identifying the ", K - 1, "bp (K - 1) overlaps between unitigs")
+    @info string("Identifying the ", K - 1, "bp (K - 1) overlaps between ", length(nodes(sg)), " unitigs")
     # Save the (k-1)mer in (rev on first k-1 / fw on last k-1) or out ( fw on first k-1 / bw on last k-1)
-    @debug "Saving K - 1 overlaps to `in` or `out`"
+    @debug "Sorting K - 1 overlaps as `in` or `out`"
     in = Vector{Tuple{DNAKmer{K-1},NodeID}}()
     out = Vector{Tuple{DNAKmer{K-1},NodeID}}()
     sizehint!(in, length(nodes(sg)))
@@ -214,34 +211,32 @@ function find_unitig_overlaps(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
     return in, out
 end
 
-
-
 function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
+    in, out = find_unitig_overlaps(sg, DNAKmer{K})
     @info string("Linking ", length(nodes(sg)), " unitigs by their ", K - 1, "bp (K - 1) overlaps")
-    
     # Connect all out -> in for all combinations on each kmer.
     next_out_idx = 1
     for i in in
         while first(out[next_out_idx]) < first(i)
             next_out_idx += 1
         end
-        
         oidx = next_out_idx
         while oidx <= length(out) && first(out[oidx]) == first(i)
-            add_link!(sg, last(i), last(out[oidx]), -K+1) # No support, although we could add the DBG operation as such.
+            @debug string("Adding link to graph between", last(i), last(out[oidx]))
+            add_link!(sg, last(i), last(out[oidx]), -K + 1) # No support, although we could add the DBG operation as such.
             oidx += 1
         end
     end
 end
-
-
 
 function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
     @info string('C', str)
     sg = GRAPH_TYPE()
     build_unitigs_from_kmerlist!(sg, kmerlist)
-    connect_unitigs_by_overlaps!(sg, DNAKmer{K})
+    if n_nodes(sg) > 1
+        connect_unitigs_by_overlaps!(sg, DNAKmer{K})
+    end
     @info string("Done c", str)
     return sg
 end
