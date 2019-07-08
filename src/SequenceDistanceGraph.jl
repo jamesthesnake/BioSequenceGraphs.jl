@@ -306,7 +306,7 @@ function dump_to_gfa1(sg, filename)
     
     println(gfa, "H\tVN:Z:1.0")
     
-    for nid for eachindex(nodes(sg))
+    for nid in eachindex(nodes(sg))
         n = node(sg, nid)
         if n.deleted
             continue
@@ -332,7 +332,8 @@ function dump_to_gfa1(sg, filename)
             end
         end
     end
-    
+    close(gfa)
+    close(fasta)
 end
 
 

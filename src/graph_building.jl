@@ -27,7 +27,7 @@ end
 
 encoded_data(mer) = reinterpret(UInt64, mer)
 
-function iscanonical(seq::BioSequence{DNAAlphabet{2}})
+function iscanonical(seq)
     i = 1
     j = length(seq)
     @inbounds while i <= j
@@ -45,9 +45,11 @@ function canonical!(seq::BioSequence{DNAAlphabet{2}})
     if !iscanonical(seq)
         reverse_complement!(seq)
     end
+    return seq
 end
 
-# TODO: Update BioSequences with new neighbour iterators instead.
+# TODO: Update BioSequences with new neighbour iterators instead. For now, these
+# functions will do.
 function kmer_fw_neighbours(mer::DNAKmer{K}) where {K}
     d = encoded_data(mer)
     base = d << 2
@@ -107,17 +109,21 @@ function get_fw_idxs!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{D
     end
 end
 
-function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
-    @info string("Start constructing Sequence Graph from ", length(kmerlist), " ", K, "-mers")
-    sg = SequenceDistanceGraph{BioSequence{DNAAlphabet{2}}}()
+const GRAPH_TYPE = SequenceDistanceGraph{BioSequence{DNAAlphabet{2}}}
+
+function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K}}) where {K}
+    @info string("Constructing unitigs from ", length(kmerlist), " ", K, "-mers")
+    #sg = SequenceDistanceGraph{BioSequence{DNAAlphabet{2}}}()
     used_kmers = falses(length(kmerlist))
-    bw = Vector{Kidx{K}}()
-    fw = Vector{Kidx{K}}()
-    
-    @info "Building unitigs from kmers"
+    #bw = Vector{Kidx{K}}()
+    #fw = Vector{Kidx{K}}()
     for start_kmer_idx in eachindex(kmerlist)
         # Any kmer can only occur in one unitig.
-        if used_kmers[start_kmer_idx] 
+        
+        @debug "Considering new kmer" start_kmer_idx
+        
+        if used_kmers[start_kmer_idx]
+            @debug "Kmer has been used" start_kmer_idx
             continue
         end
         
@@ -127,12 +133,12 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
         end_fw = is_end_fw(start_kmer, kmerlist)
         
         if !end_bw && !end_fw
+            @debug "Kmer is middle of a unitig" start_kmer_idx start_kmer
             continue
         end
         
-        
-        
         if end_bw && end_fw
+            @debug "Kmer is single unitig" start_kmer_idx start_kmer 
             # Kmer as unitig
             s = BioSequence{DNAAlphabet{2}}(start_kmer)
             used_kmers[start_kmer_idx] = true
@@ -141,34 +147,39 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
             # Make sure the unitig starts on FW.
             current_kmer = start_kmer
             used_kmers[start_kmer_idx] = true
-            
             if end_fw
                 current_kmer = reverse_complement(start_kmer)
                 end_fw = end_bw
             end
+            @debug "Start of unitig" start_kmer current_kmer end_bw end_fw
             # Start unitig 
             s = BioSequence{DNAAlphabet{2}}(current_kmer)
             fwn = Vector{Kidx{K}}()
             while !end_fw
                 # Add end nucleotide, update current kmer.
                 get_fw_idxs!(fwn, current_kmer, kmerlist)
+                @debug "Extending unitig" fwn 
                 current_kmer = first(fwn).kmer
                 if used_kmers[first(fwn).idx]
+                    @debug "New kmer is already used" current_kmer
                     break # Break circular contigs into lines.
                 end
                 used_kmers[first(fwn).idx] = true
-                s.push!(last(mer))
+                push!(s, last(current_kmer))
                 end_fw = is_end_fw(current_kmer, kmerlist)
             end
         end
         add_node!(sg, canonical!(s))
     end
-    
     # A temporary check for circle problem for now.
     if !all(used_kmers)
-        @warn "Some kmers have not been incorporated into contigs. This may be a case of the circle problem" kmerlist[(!).(used_kmers)]
+        @warn "Some kmers have not been incorporated into unitigs. This may be a case of the circle problem" kmerlist[(!).(used_kmers)]
     end
-    
+    @info string("Constructed ", length(nodes(sg)), "unitigs")
+    return sg
+end
+
+function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
     @info "Linking unitigs by their overlaps"
     
     # Save the (k-1)mer in (rev on first k-1 / fw on last k-1) or out ( fw on first k-1 / bw on last k-1)
@@ -177,7 +188,7 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     sizehint!(in, length(nodes(sg)))
     sizehint!(out, length(nodes(sg)))
     for nid in eachindex(nodes(sg))
-        nodeseq = nodes(sg)[nid]
+        nodeseq = node(sg, nid).seq
         firstmer = DNAKmer{K-1}(nodeseq[1:K - 1])
         if iscanonical(firstmer)
             push!(in, (firstmer, nid))
@@ -204,8 +215,20 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
         oidx = next_out_idx
         while oidx <= length(out) && first(out[oidx]) == first(i)
             add_link!(sg, last(i), last(out[oidx]), -K+1) # No support, although we could add the DBG operation as such.
+            oidx += 1
         end
     end
+end
+
+
+
+function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
+    sg = GRAPH_TYPE()
+    
+    build_unitigs_from_kmerlist!(sg, kmerlist)
+    
+    
+    
     @info string("Done constructing Sequence Graph from ", length(kmerlist), " ", K, "-mers")
     return sg
 end
