@@ -1,74 +1,17 @@
-
-# Node and Link types for SequenceDistanceGraph
-# ---------------------------------------------
+###
+### Node and Link types for SequenceDistanceGraph
+###
 
 const NodeID = Int64
 
-"""
-The SDGNode type represents a node in a SequenceDistanceGraph.
+include("SDGNode.jl")
+include("DistanceGraphLink.jl")
 
-At present it contains only two fields, first it holds an instance of a BioSequences
-Sequence type.
+const LinksT = Vector{Vector{DistanceGraphLink}}
 
-Secondly, it tracks a flag which indicates if the node has been
-deleted or not.
-
-!!! note
-    The deleted flag allows us to mark nodes in the graph as deleted, which can be of
-    help in some algorithms where the graph structure is being edited (merging nodes for example).
-
-    Actually deleting the node would shift node IDs and require redoing all links in the graph
-    and so on.
-
-    So just marking a node as deleted and not using it anymore is a lazy but sometimes
-    helpful choice.
-"""
-struct SDGNode{S}
-    seq::S
-    deleted::Bool
-end
-
-function empty_node(::Type{S}) where {S <: Sequence}
-    return SDGNode{S}(empty_seq(S), true)
-end
-
-# TODO: This is a hacked copy of the dna string literal macro from BioSequences,
-# except it creates 2-bit based DNA sequences rather than 4 bit based ones.
-# This ability to choose the bit encoding should make its way to BioSequences.jl
-# in the future, but for now, it's here.
-#
-# I basically want this as it lets me create a single literal empty sequence, shared
-# by all deleted SDG nodes. Rather than having each deleted SDG node create a new empty
-# sequence.
-macro dna2_str(seq, flag)
-    if flag == "s"
-        return BioSequence{DNAAlphabet{2}}(BioSequences.remove_newlines(seq))
-    elseif flag == "d"
-        return quote
-            BioSequence{DNAAlphabet{2}}($(BioSequences.remove_newlines(seq)))
-        end
-    end
-    error("Invalid DNA flag: '$(flag)'")
-end
-
-empty_seq(::Type{BioSequence{DNAAlphabet{2}}}) = dna2""s
-
-"""
-Represents a single distance between two sequences in a SequenceDistanceGraph.
-"""
-struct DistanceGraphLink
-    source::NodeID
-    destination::NodeID
-    dist::Int64
-end
-
-source(l::DistanceGraphLink) = l.source
-destination(l::DistanceGraphLink) = l.destination
-distance(l::DistanceGraphLink) = l.dist
-
-"Test if link `l` is a forward link leaving node `n`."
-is_forwards_from(l::DistanceGraphLink, n::NodeID) = source(l) == -n
-is_backwards_from(l::DistanceGraphLink, n::NodeID) = source(l) == n
+###
+### Graph types
+###
 
 """
 The SequenceDistanceGraph is a representation of a genome assembly.
@@ -105,6 +48,7 @@ function SequenceDistanceGraph{S}() where {S<:Sequence}
 end
 
 n_nodes(sg::SequenceDistanceGraph) = length(nodes(sg))
+each_node_id(sg::SequenceDistanceGraph) = eachindex(nodes(sg))
 
 # Graph accessor functions
 # ------------------------
@@ -112,8 +56,6 @@ n_nodes(sg::SequenceDistanceGraph) = length(nodes(sg))
 nodes(sg::SequenceDistanceGraph) = sg.nodes
 node(sg::SequenceDistanceGraph, i::NodeID) = nodes(sg)[abs(i)]
 links(sg::SequenceDistanceGraph) = sg.links
-
-
 
 """
     links(sg::SequenceGraph, node::NodeID)
@@ -290,17 +232,6 @@ function get_previous_nodes(sg::SequenceDistanceGraph, n::NodeID)
     end
 end
 
-#=
-function find_tips(sg::SequenceDistanceGraph)
-    r = Vector{NodeID}()
-    for l in links(sg)
-        if length(l) == 1
-            d = destination(l[1])
-            for ol in links(sg, d)
-                
-end
-=#
-
 function dump_to_gfa1(sg, filename)
     fasta_filename = "$filename.fasta"
     gfa = open("$filename.gfa", "w")
@@ -337,5 +268,3 @@ function dump_to_gfa1(sg, filename)
     close(gfa)
     close(fasta)
 end
-
-

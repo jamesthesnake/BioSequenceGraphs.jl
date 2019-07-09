@@ -240,3 +240,5 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     @info string("Done c", str)
     return sg
 end
+SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}}) where {K} = new_graph_from_kmerlist(kmerlist)
+

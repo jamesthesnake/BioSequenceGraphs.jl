@@ -7,12 +7,6 @@ export SequenceDistanceGraph,
 
 using BioSequences
 
-#include("Nodes.jl")
-#include("Links.jl")
-#include("SequenceGraph.jl")
-#include("IO.jl")
-include("SequenceDistanceGraph.jl")
-include("graph_building.jl")
-#include("DeBruijnGraph.jl")
-#include("GFA1/GFA1.jl")
+include("graph/SequenceDistanceGraph.jl")
+include("graph/graph_building.jl")
 end # module BioSequenceGraphs
