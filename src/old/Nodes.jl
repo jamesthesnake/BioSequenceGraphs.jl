@@ -19,28 +19,13 @@ struct SequenceGraphNode{S <:Sequence}
     active::Bool
 end
 
-
 sequence(sn::SequenceGraphNode) = sn.sequence
 
 isactive(sn::SequenceGraphNode) = sn.active
 
 reverse_complement!(sn::SequenceGraphNode) = reverse_complement!(sequence(sn))
 
-length(sn::SequenceGraphNode) = Base.length(sequence(sn))
-
-function iscanonical(seq::BioSequence{DNAAlphabet{2}})
-    i = 1
-    j = length(seq)
-    @inbounds while i < j
-        f = seq[i]
-        r = complement(seq[j])
-        f < r && return true
-        r < f && return false
-        i += 1
-        j -= 1
-    end
-    return true
-end
+Base.length(sn::SequenceGraphNode) = Base.length(sequence(sn))
 
 iscanonical(sn::SequenceGraphNode) = iscanonical(sequence(sn))
 
