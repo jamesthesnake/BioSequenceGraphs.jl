@@ -383,10 +383,23 @@ function new_extract_canonical_kmers(read_set::Set{BioSequence{A}},k::Int64)wher
     return kmer_set
 end
 
+
 ## Error Correction !!!
 # Very important step for contig formalization
 
 
+## Copying Ben's code
+
+encoded_data2(mer) = reinterpret(UInt64, mer)
+
+function kmer_bw_neighbours2(mer::DNAKmer{K}) where {K}
+    d = encoded_data(mer)
+    base = d >> 2
+    BT = typeof(base)
+    return (DNAKmer{K}(base), DNAKmer{K}(base + (BT(1) << 2(K - 1))), DNAKmer{K}(base + (BT(2) << 2(K - 1))), DNAKmer{K}(base + (BT(3) << 2(K - 1))))
+end
+
+## Copying Ben's code
 """
     get_parents(node_id::Int64,dbg::DeBruijnGraph)
 
@@ -410,8 +423,89 @@ end
 
 
 """
+TODO: We have to have a coverage information to select between two paths and decide one of them is resulted by a sequencing errors
+For now deletes both tips which is absolutely wrong :D
+To overcome this we can choose to delete only the shorter path assuming that the error-prone path is shorter than the correct one
+
+    delete_end_tips(dbg::DeBruijnGraph)
+
+
+
+Using the kmer_bw_neighbours function from Ben's code
+Still using the current dictionary based design for dbg
+Only remove the tips occur resulting by errors that occur at the end of a read
+"""
+function delete_end_tips(dbg::DeBruijnGraph)
+    candidates = Vector{Int64}()
+    for link in links(dbg)
+        if Base.length(link[2])==0
+            push!(candidates,abs(link[1]))
+        end
+    end
+    nodes= nodes(dbg)
+    to_be_removed = Vector{Int64}()
+    parent_lens = Dict{Int64,Int64} ## Stores the length of the minimum tip for each end of the tip paths
+    for cand in candidates
+        seq = sequence(nodes[cand])
+        parent_cands = kmer_bw_neighbours2(seq)
+        in_parents = Vector{Int64}()
+        error_path = Vector{Int64}() ## contains all the nodes on the error path
+        push!(error_path,cand)
+        for pcand in parent_cands
+            for node in nodes
+                if pcand==sequence(node[2])
+                    push!(in_parents,(node[1],sequence(node[2])))
+                end
+            end
+        end
+        current_nodeid = cand
+        while Base.length(in_parents) == 1 ## This is not a starting node of a dead end so we add to the to be removed list and continue searching with parent
+            current_nodeid = in_parents[1][1]
+            current_node_seq = in_parents[1][2]
+            empty!(in_parents)
+            push!(error_path,current_nodeid)
+            if Base.length(links(dbg)[current_nodeid]) == 1
+                parent_cands = kmer_bw_neighbours2(current_node_seq)
+                for pcand in parent_cands
+                    for node in nodes
+                        if pcand==sequence(node[2])
+                            push!(in_parents,(node[1],sequence(node[2])))
+                        end
+                    end
+                end
+            else
+                break
+            end
+        end
+        p = last(error_path)
+        if p in keys(parent_lens)
+            if Base.lengh(error_path)< parent_lens[p]
+                push!(to_be_removed,error_path) ## only store the shortest path found for a given parent
+            end
+        else
+            push!(to_be_removed,error_path)
+            parent_lens[p] = Base.length(error_path)
+            print("Parent lengths")
+            print(parent_lens)
+        end
+    end
+    ##  only contains the shortest paths for each parent (do not delete the parent though!!!)
+    println("To be removed")
+    println(to_be_removed)
+    for path in to_be_removed
+        for i in path[1:end-1]
+            delete!(nodes(dbg2),abs(i))
+            delete!(links(dbg2),abs(i))
+        end
+    end
+end
+
+"""
     delete_tips(dbg::DeBruijnGraph)
 
+
+DOES NOT TAKE INTO ACCOUNT NEW DEADEND RESULTING FROM DELETING PREVIOUS DEADENDS
+DEADEND REMOVAL SHOULD BE DONE RECURSIVELY!!!
 deletes the dead-end tips in a dbg
 
 dead-end tip is defined as tips that have no outgoing edge and a single incoming edge.
@@ -444,8 +538,8 @@ function delete_tips(dbg::DeBruijnGraph)
     println("To be removed")
     println(to_be_removed)
     for i in to_be_removed
-        delete!(nodes(dbg2),abs(i))
-        delete!(links(dbg2),abs(i))
+        delete!(nodes(dbg),abs(i))
+        delete!(links(dbg),abs(i))
     end
 end
 
