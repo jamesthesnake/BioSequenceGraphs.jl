@@ -1,4 +1,8 @@
 
+
+sub_seq(seq::Sequence,ind::Int64,ind2::Int64=Base.length(seq)) = typeof(seq)(String(seq)[ind:ind2])
+sub_seq(kmer::Kmer{T,K},ind::Int64,ind2::Int64=K) where{T,K} = Kmer{T,ind2-ind+1}(String(kmer)[ind:ind2])
+
 """
     get_fastq_sequences(fastq_file,::Type{S})where S <: BioSequences.Sequence
 
@@ -20,9 +24,22 @@ end
 
 
 """
+    get_unique_kmers(dbg)
+
+For the contigging stage we first find the unique kmers in the unitig graph.
+Then for each read we find the position of each kmer that occur in the read and see  if the path is sensible.
+
+
+"""
+
+function get_unique_kmers(dbg,k)
+
+end
+
+"""
     get_paired_end_reads(seqs::Set{S})where S <: BioSequences.Sequence
 
-    
+
 For testing purposes we generate some paired_end reads by masking the middle part of some reads
 We represent paired-end reads as a tuple of two biosequences and an integer range representing the possible distance
 

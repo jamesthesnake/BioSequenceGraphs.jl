@@ -8,7 +8,7 @@ using Pseudoseq
 ## First we generate data using a reference file in fasta format.
 ## Below is a small example for illustrative purposes.
 
-Pseudoseq.sequence("ecoli-ref.fasta", "pe-reads.fastq"; ng = 5000, flen = 700, cov = 2, paired = true, rdlen = 250, err = 0.001)
+    Pseudoseq.sequence("ecoli-ref.fasta", "pe-reads.fastq"; ng = 5000, flen = 700, cov = 2, paired = true, rdlen = 250, err = 0.001)
 
 ## This generated a file named "pe-reads.fastq" with coverage 2, read length 250 and error rate 1
 

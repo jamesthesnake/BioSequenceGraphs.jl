@@ -25,6 +25,8 @@ function canonical_bio(x::BioSequence{A})where{A}
     return x < y ? x : y
 end
 
+
+
 """
     links(sg::SequenceGraph, node::NodeID)
 
@@ -266,6 +268,89 @@ function deBruijn_constructor(kmer_vector::Vector{Kmer{T,K}}) where{T<:NucleicAc
 end
 
 
+"""
+    get_kmers(seq,k)
+
+    Returns a list of all kmers in a sequence
+    This will be used together with kmer_counter which returns unique kmers to map paired-end reads to the graph
+    Works for both DNAKmer and BioSequence types
+"""
+function get_kmers(seq,k)
+    if  typeof(seq)!=DNASequence
+        seq = DNASequence(String(sequence(nodes(dbg2)[7])))
+    end
+    if  k > Base.length(seq)
+            return nothing
+    end
+    kmer_iterator = each(Kmer{DNA,k},seq1)
+    kmers=  Vector{DNAKmer{k}}()
+    kmer_state = Base.iterate(kmer_iterator) ## initialize
+    while kmer_state!=nothing
+        kmer = kmer_state[1][2]
+        push!(kmers,kmer)
+        start_ind = kmer_state[1][1]
+        new_state= (start_ind,1,UInt64(0))
+        kmer_state = iterate(kmer_iterator,new_state)
+    end
+    kmers
+end
+
+
+# Counting kmers, Unique kmer_set
+## store all the positions for each kmer
+
+"""
+    kmer_counter(dbg,k)
+
+The unique kmers will be used to map the reads to the dbg
+Returns two variables :
+        kmer_counts : Dictionary containing number of occurrence of each kmer in the dbg
+        uniques : Vector of three values (Kmer, NodeID, pos) for each unique kmer in the dbg
+"""
+function kmer_counter(dbg,k)
+    println(k_value(dbg))
+    kmer_counts = Dict{DNAKmer{k},Int64}()
+    kmer_pos = Dict{DNAKmer{k},Tuple{Int64,Int64}}()## to store the NodeID and position
+    for node in nodes(dbg)
+        kmers = Vector{Tuple{DNAKmer{k},Int64}}()
+        seq = sequence(node[2])
+        if typeof(seq)!=BioSequence{DNAAlphabet{4}}
+            l1 = Base.length(seq)
+            for x in 1:l1-k+1
+                kmer = sub_seq(seq,x,x+k-1)
+                push!(kmers,(kmer,x))
+            end
+        else
+            kmer_iterator = each(Kmer{DNA,k},seq)
+            kmer_state = Base.iterate(kmer_iterator) ## initialize
+            i = 1
+            while kmer_state!=nothing
+                kmer = kmer_state[1][2]
+                push!(kmers,(kmer,i))
+                start_ind = kmer_state[1][1]
+                new_state= (start_ind,1,UInt64(0))
+                kmer_state = iterate(kmer_iterator,new_state)
+                i+=1
+            end
+        end
+        for kmer in kmers
+            if kmer[1] in keys(kmer_counts)
+                kmer_counts[kmer[1]]+=1
+            else
+                kmer_counts[kmer[1]]=1
+                kmer_pos[kmer[1]] = (node[1],kmer[2])
+                #println(kmer_pos[kmer[1]])
+            end
+        end
+    end
+    uniques = Vector{Tuple{DNAKmer{k},Int64,Int64}}()
+    for kmer in keys(kmer_pos)
+        if kmer_counts[kmer] == 1
+            push!(uniques,(kmer,kmer_pos[kmer][1],kmer_pos[kmer][2]))
+        end
+    end
+    return kmer_counts,uniques
+end
 
 # Kmer Enumeration
 """
@@ -488,9 +573,9 @@ function simple_path_finder(dbg::DeBruijnGraph)
             push!(path,sign1*parent)
             parent = destination(links1[node_id][1])
             while bothways_outdegree(dbg,parent)==1 && bothways_indegree(dbg,parent)==1
-                sign1 = sign(source(links1[parent][1]))
+                sign1 = sign(source(links1[abs(parent)][1]))
                 push!(path,parent)
-                parent = destination(links1[parent][1])
+                parent = destination(links1[abs(parent)][1])## i think this  was  the problem
             end
 
             ## if the indegree==1 extend the path to include the final kmer at then end of the path
