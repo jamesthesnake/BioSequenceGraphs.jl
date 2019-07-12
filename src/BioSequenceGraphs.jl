@@ -14,8 +14,7 @@ export
     sequence,
     # Graph traversal
     get_next_nodes,
-    get_previous_nodes,
-    get_all_unitigs
+    get_previous_nodes
 
 using BioSequences
 

@@ -29,3 +29,16 @@ add_link!
 remove_link!
 disconnect_node!
 ```
+
+# Graph traversal
+
+```@docs
+get_next_nodes
+get_previous_nodes
+```
+
+# IO
+
+```@docs
+dump_to_gfa1
+```

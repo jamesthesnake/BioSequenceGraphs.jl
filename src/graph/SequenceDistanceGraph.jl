@@ -32,7 +32,7 @@ negative end can be thought of as the sequence end.
 
 A single distance between two sequences is represented as a single link.
 Every link connects two node ends and contains a distance (they take the form
-`([+, -]n1, [+, -]n2, [+, -]dist)`).
+`([+|-]n1, [+|-]n2, [+|-]dist)`).
 A link connects two node ends, and so the order of the signed nodes in the links
 does not change the link.
 If the distance in a link is negative, this represents an overlap between two
@@ -280,7 +280,27 @@ backward_links(sg::SequenceDistanceGraph, n::NodeID) = forward_links(sg, -n)
 """
     get_next_nodes(sg::SequenceDistanceGraph, n::NodeID)
 
-Find node IDs for forward nodes of `n`.
+Find and return the IDs of the nodes you may next visit given the ID of the node
+you are currently travelling through.
+
+!!! note
+    In the context of this function, the sign of the node id `n` matters, as it
+    denotes direction. A positive node ID means you are travelling through the
+    node in the canonical direction (from the source (+) end to the sink
+    (-) end). A negative node ID means you are travelling through the node
+    in the non-canonical direction (from the sink (-) end, to the source (+) end).
+    
+    For example for node 1, if you are traversing it in the canonical direction,
+    and want to know which nodes you may visit next, `get_next_nodes(sg, 1)`
+    will give you those nodes. If you were travelling through node 1 in the
+    non-canonical direction, then you would use the negative ID 
+    instead: `get_next_nodes(sg, -1)`.
+    
+    This applies to the node IDs returned by this function too: Say 
+    `get_next_nodes(sg, 1)` resulted in `[3, -7, 4]`. Then that means after
+    traversing through node 1 in the canonical direction, you may next traverse
+    through either: node 3 in the canonical direction, node 7 in the non-canonical
+    direction, or node 4 in the canonical direction.
 """
 function get_next_nodes(sg::SequenceDistanceGraph, n::NodeID)
     r = Vector{NodeID}()
@@ -297,7 +317,28 @@ end
 """
     get_previous_nodes(sg::SequenceDistanceGraph, n::NodeID)
 
-Find node IDs for backward nodes of `n`.
+Find and return the IDs of the nodes you may have visited prior to the node
+you are currently travelling through.
+
+!!! note
+    In the context of this function, the sign of the node id `n` matters, as it
+    denotes direction. A positive node ID means you are travelling through the
+    node in the canonical direction (from the source (+) end to the sink
+    (-) end). A negative node ID means you are travelling through the node
+    in the non-canonical direction (from the sink (-) end, to the source (+) end).
+    
+    For example for node 1, if you are traversing it in the canonical direction,
+    and want to know which nodes you could have come through prior to the
+    current node, `get_previous_nodes(sg, 1)` will give you those nodes.
+    If you were travelling through node 1 in the non-canonical direction, then
+    you would use the negative ID  instead: `get_previous_nodes(sg, -1)`.
+    
+    This applies to the node IDs returned by this function too: Say 
+    `get_previous_nodes(sg, 1)` resulted in `[3, -7, 4]`. Then that means if you
+    are currently traversing through node 1 in the canonical direction, you may
+    have arrived there after previously traversing either: node 3 in the
+    canonical direction, node 7 in the non-canonical direction, or node 4 in the
+    canonical direction.
 """
 function get_previous_nodes(sg::SequenceDistanceGraph, n::NodeID)
     r = Vector{NodeID}()
@@ -310,6 +351,7 @@ function get_previous_nodes(sg::SequenceDistanceGraph, n::NodeID)
     end
 end
 
+"Dump graph to file in a GFA1 formatted representation."
 function dump_to_gfa1(sg, filename)
     fasta_filename = "$filename.fasta"
     gfa = open("$filename.gfa", "w")
