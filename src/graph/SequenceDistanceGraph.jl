@@ -99,7 +99,7 @@ correlative node id `n`.
 """
 @inline function node(sg::SequenceDistanceGraph, n::NodeID)
     check_node_id(sg, n)
-    return nodes_unsafe(sg, n)
+    return node_unsafe(sg, n)
 end
 
 @inline links_unsafe(sg::SequenceDistanceGraph, n::NodeID) = @inbounds links(sg)[abs(n)]
