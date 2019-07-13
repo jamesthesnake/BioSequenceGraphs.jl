@@ -12,7 +12,7 @@
 # Also, unlike the previous algorithm, when it came to making connections, an all
 # v all double for loop was used, which was a bit pointless, so we avoid that
 # in this version, since the two connection vectors are sorted, we can do a single
-# pass of the two vectors instead. 
+# pass of the two vectors instead.
 # With decent Kmer counting, this thing should be able to at least put together
 # medium size genome like arabidopsis without much trouble. Larger genomes are
 # probably fine too, but might need a big machine.
@@ -113,31 +113,49 @@ end
 
 const GRAPH_TYPE = SequenceDistanceGraph{BioSequence{DNAAlphabet{2}}}
 
+## Tip removal
+
+function delete_tips(kmerlist::Vector{DNAKmer{K}}) where {K}
+    sort!(kmerlist)
+    used= falses(length(kmerlist))
+    for kmer_ind in  eachindex(kmerlist)
+        if used[kmer_ind]
+            continue
+        end
+        mer = kmerlist[kmer_ind]
+        next = Vector{Kidx{K}}()
+        get_fw_idxs!(next, mer, merlist)
+        next2 = Vector{Kidx{K}}()
+        get_bw_idxs!(next, mer, merlist)
+        if Base.length(next)==0 && Base.length(next2)==1 ## Start of a tip backward from the current mer
+            
+end
+
 function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K}}) where {K}
     @info string("Constructing unitigs from ", length(kmerlist), " ", K, "-mers")
     used_kmers = falses(length(kmerlist))
-    
+
     for start_kmer_idx in eachindex(kmerlist)
         @debug "Considering new kmer" start_kmer_idx
-        
+
         # Any kmer can only occur in one unitig.
         if used_kmers[start_kmer_idx]
             @debug "Kmer has been used" start_kmer_idx
             continue
         end
-        
+
         # Check if the kmer is an end/junction of a unitig.
         start_kmer = kmerlist[start_kmer_idx]
         end_bw = is_end_bw(start_kmer, kmerlist)
         end_fw = is_end_fw(start_kmer, kmerlist)
-        
+
         if !end_bw && !end_fw
             @debug "Kmer is middle of a unitig" start_kmer_idx start_kmer
             continue
         end
-        
+
         if end_bw && end_fw
-            @debug "Kmer is single unitig" start_kmer_idx start_kmer 
+            @debug "Kmer is single unitig" start_kmer_idx start_kmer
             # Kmer as unitig
             s = BioSequence{DNAAlphabet{2}}(start_kmer)
             used_kmers[start_kmer_idx] = true
@@ -151,13 +169,13 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
                 end_fw = end_bw
             end
             @debug "Start of unitig" start_kmer current_kmer end_bw end_fw
-            # Start unitig 
+            # Start unitig
             s = BioSequence{DNAAlphabet{2}}(current_kmer)
             fwn = Vector{Kidx{K}}()
             while !end_fw
                 # Add end nucleotide, update current kmer.
                 get_fw_idxs!(fwn, current_kmer, kmerlist)
-                @debug "Extending unitig" fwn 
+                @debug "Extending unitig" fwn
                 current_kmer = first(fwn).kmer
                 if used_kmers[first(fwn).idx]
                     @debug "New kmer is already used" current_kmer
@@ -217,7 +235,7 @@ function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where 
     # Connect all out -> in for all combinations on each kmer.
     next_out_idx = 1
     for i in in
-        while first(out[next_out_idx]) < first(i)
+        while next_out_idx <= length(out) && first(out[next_out_idx]) < first(i)
             next_out_idx += 1
         end
         oidx = next_out_idx
@@ -241,4 +259,3 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     return sg
 end
 SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}}) where {K} = new_graph_from_kmerlist(kmerlist)
-

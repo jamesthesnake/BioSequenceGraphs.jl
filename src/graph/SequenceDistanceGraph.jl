@@ -59,7 +59,7 @@ Get a reference to the vector of nodes in a graph `sg`.
 
 !!! warning
     It is a bad idea to edit this vector yourself unless you know what you are
-    doing. 
+    doing.
 """
 @inline nodes(sg::SequenceDistanceGraph) = sg.nodes
 
@@ -99,7 +99,7 @@ correlative node id `n`.
 """
 @inline function node(sg::SequenceDistanceGraph, n::NodeID)
     check_node_id(sg, n)
-    return nodes_unsafe(sg, n)
+    return node_unsafe(sg, n)
 end
 
 @inline links_unsafe(sg::SequenceDistanceGraph, n::NodeID) = @inbounds links(sg)[abs(n)]
@@ -107,7 +107,7 @@ end
 """
     links(sg::SequenceGraph, n::NodeID)
 
-Get all of the links of a Node of a sequence distance graph using its 
+Get all of the links of a Node of a sequence distance graph using its
 correlative node id `n`.
 
 !!! note
@@ -314,9 +314,9 @@ function dump_to_gfa1(sg, filename)
     fasta_filename = "$filename.fasta"
     gfa = open("$filename.gfa", "w")
     fasta = open(FASTA.Writer, fasta_filename)
-    
+
     println(gfa, "H\tVN:Z:1.0")
-    
+
     for nid in eachindex(nodes(sg))
         n = node(sg, nid)
         if n.deleted
@@ -324,7 +324,7 @@ function dump_to_gfa1(sg, filename)
         end
         println(gfa, "S\tseq", nid, "\tLN:i:", length(n.seq), "\tUR:Z:", fasta_filename)
     end
-    
+
     for ls in links(sg)
         for l in ls
             if source(l) <= destination(l)
@@ -346,6 +346,3 @@ function dump_to_gfa1(sg, filename)
     close(gfa)
     close(fasta)
 end
-
-
-    
