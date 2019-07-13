@@ -317,6 +317,7 @@ function dump_to_gfa1(sg, filename)
 
     println(gfa, "H\tVN:Z:1.0")
 
+    println(gfa, "H\tVN:Z:1.0")
     for nid in eachindex(nodes(sg))
         n = node(sg, nid)
         if n.deleted
@@ -324,7 +325,6 @@ function dump_to_gfa1(sg, filename)
         end
         println(gfa, "S\tseq", nid, "\tLN:i:", length(n.seq), "\tUR:Z:", fasta_filename)
     end
-
     for ls in links(sg)
         for l in ls
             if source(l) <= destination(l)

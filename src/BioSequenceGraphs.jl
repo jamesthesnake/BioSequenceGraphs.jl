@@ -15,7 +15,8 @@ export
     # Graph traversal
     get_next_nodes,
     get_previous_nodes,
-    get_all_unitigs
+    get_all_unitigs,
+    delete_tips
 
 using BioSequences
 
