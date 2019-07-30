@@ -16,6 +16,7 @@ export
     get_next_nodes,
     get_previous_nodes,
     get_all_unitigs,
+    build_unitigs_from_kmerlist2,
     delete_tips
 
 using BioSequences

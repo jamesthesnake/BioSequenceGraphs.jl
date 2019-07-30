@@ -157,9 +157,12 @@ const GRAPH_TYPE = SequenceDistanceGraph{BioSequence{DNAAlphabet{2}}}
 
     Removes the low coverage paths in all bubbles
     all_paths contain list of triples : the node_id indices, nucleotide sequence and coverage for each path
+    kmer_num : number of kmers inputted for dbg creation (used for indexing)
 """
-function pop_bubbles!(all_paths)
-    assert(Base.length(all_paths)==Base.length(kmercoverage))
+function pop_bubbles(all_paths,kmer_num)
+    #assert(Base.length(all_paths)==Base.length(kmercoverage))
+    print("All paths are as below : ")
+    println(all_paths)
     bubbles = Vector{Tuple{Int64,Int64}}()
     for i in eachindex(all_paths)
         for j in i+1:Base.length(all_paths)
@@ -180,38 +183,51 @@ function pop_bubbles!(all_paths)
             deleteat!(all_paths,p2)
         end
     end
+
+    ## after deleting the bubbles we may have newly formed longer new_contigs
+    ## at this point we check end and start points of each contig and combine if they form a contig together
     sort!(all_paths)
-    start_counts = zeros(Base.length(all_paths))
-    end_counts = zeros(Base.length(all_paths))
-    cum_counts = zeros(Base.length(all_paths))
+    start_counts = zeros(kmer_num)
+    end_counts = zeros(kmer_num)
+    cum_counts = zeros(kmer_num)
     #cum_end_counts = zeros(Base.length(all_paths))
     for path in all_paths
         start_ind = path[1][1]
         end_ind   = path[1][end]
         start_counts[start_ind]+=1
         end_counts[end_ind]+=1
-        for i in range start_ind:Base.length(all_paths)
+        for i in start_ind:kmer_num
             cum_counts[i]+=1
         end
     end
     merged_paths = Vector{Tuple{Int64,Int64}}()
-    
+    used_contigs = zeros(Base.length(all_paths))
+    new_contigs = Vector{Vector{Int64}}()
     ## a bit inefficient for now
     ## we can only look at indices that satisfy these conditions as we have checked them already
     for i in eachindex(all_paths)
         end_ind = all_paths[i][1][end]
+        if used_contigs[i] == 1
+            continue
+        end
         if start_counts[end_ind]==1 && end_counts[end_ind]==1
             next_contig_ind = cum_counts[end_ind]
+            used_contigs[next_contig_ind ] = 1
             push!(merged_paths,(i,next_contig_ind))
+            push!(new_contigs,vcat(all_paths[i][1][1:end-1],all_paths[next_contig_ind][1]))
+        else
+            push!(new_contigs,all_paths[i][1])
         end
+        used_contigs[i]=1
     end
-    new_contigs = Vector{Vector{Int64}}()
+    ## I think there is a problem with the start index node
+    """
     for pair in merged_paths
         ind1= pair[1]
         ind2= pair[2]
         push(new_contigs,vcat(all_paths[ind1][1][1:end-1],all_paths[ind2][1]))
     end
-
+    """
     return new_contigs
 end
 
@@ -308,6 +324,14 @@ end
 function generate_coverage(v::Int64)
     rand(1:100,v)
 end
+
+function get_sequence(node_list,kmerlist)
+    s = BioSequence{DNAAlphabet{2}}(kmerlist[node_list[1]])
+    for node_ind in eachindex(node_list[2:end])
+        push!(s,last(kmerlist[node_list[node_ind+1]]))
+    end
+    s
+end
 """
     build_unitigs_from_kmerlist2
 
@@ -318,15 +342,15 @@ And remove the low-coverage branches (bubble popping) before producing the final
 function build_unitigs_from_kmerlist2!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K}},kmercounts::Vector{Int64}) where {K}
     @info string("Constructing unitigs from ", length(kmerlist), " ", K, "-mers")
     used_kmers = falses(length(kmerlist))
-
+    single_kmers = Vector{Int64}()
     ## each path is a triple (node indices,nucleotide sequence , coverage)
-    all_paths = Vector{Tuple{Vector{Int64},BioSequence{DNAAlphabet{2}},Int64}}()
+    all_paths = Vector{Tuple{Vector{Int64},BioSequence{DNAAlphabet{2}},Float64}}()
     for start_kmer_idx in eachindex(kmerlist)
         @debug "Considering new kmer" start_kmer_idx
-
+        @info string("Considering new kmer: ", start_kmer_idx)
         # Any kmer can only occur in one unitig.
         if used_kmers[start_kmer_idx]
-            @debug "Kmer has been used" start_kmer_idx
+            @info string("Kmer has been used ", start_kmer_idx)
             continue
         end
 
@@ -334,22 +358,40 @@ function build_unitigs_from_kmerlist2!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{
         start_kmer = kmerlist[start_kmer_idx]
         end_bw = is_end_bw(start_kmer, kmerlist)
         end_fw = is_end_fw(start_kmer, kmerlist)
-
+        @info string(start_kmer_idx, " icin on arka ", end_bw, " " , end_fw)
         if !end_bw && !end_fw
-            @debug "Kmer is middle of a unitig" start_kmer_idx start_kmer
+            @info string("Kmer is middle of a unitig " ,start_kmer_idx , " ", start_kmer)
             continue
         end
 
         if end_bw && end_fw
-            @debug "Kmer is single unitig" start_kmer_idx start_kmer
+            @info string("Kmer is single unitig " ,start_kmer_idx , "  ",  start_kmer)
             # Kmer as unitig
+            push!(single_kmers,start_kmer_idx)
+            """
+            next = Vector{Kidx{K}}()
+            next2 = Vector{Kidx{K}}()
+            get_fw_idxs!(next, start_kmer, kmerlist)## we find the previous node for bubble popping
+            get_bw_idxs!(next2, start_kmer, kmerlist)## we find the previous node for bubble popping
             s = BioSequence{DNAAlphabet{2}}(start_kmer)
+            if Base.length(next)==1
+                path_nodes= Vector{Int64}([next[1].idx,start_kmer_idx])
+                coverage = get_coverage(path_nodes,kmercounts)
+                push!(all_paths,(path_nodes,s,coverage))
+            elseif Base.length(next2)==1
+                path_nodes= Vector{Int64}([next2[1].idx,start_kmer_idx])
+                coverage = get_coverage(path_nodes,kmercounts)
+                push!(all_paths,(path_nodes,s,coverage)
+            """
+            ## maybe add these later as separate contigs to the new contigs list
             used_kmers[start_kmer_idx] = true
+
         else
             # A unitig starts on this kmer.
             # Make sure the unitig starts on FW.
-
+            @info string("Constructing unitigs starting from ", start_kmer)
             current_kmer = start_kmer
+            current_kmer_idx = start_kmer_idx
             used_kmers[start_kmer_idx] = true
             if end_fw
                 current_kmer = reverse_complement(start_kmer)
@@ -358,19 +400,22 @@ function build_unitigs_from_kmerlist2!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{
             @debug "Start of unitig" start_kmer current_kmer end_bw end_fw
             # Start unitig
             next = Vector{Kidx{K}}()
-            get_bw_idxs!(next, mer, merlist)## we find the previous node for bubble popping
+            get_bw_idxs!(next, current_kmer, kmerlist)## we find the previous node for bubble popping
             s = BioSequence{DNAAlphabet{2}}(current_kmer)
-            fwn = Vector{Kidx{K}}()
-            start_node = next[1]
             final_node = -1
-            path_nodes = Vector{Int64}()
-            push!(path_nodes,start_node)
+            fwn = Vector{Kidx{K}}()
+            if Base.length(next)!=0
+                start_node = next[1]
+                path_nodes = Vector{Int64}()
+                push!(path_nodes,start_node.idx)
+            end
             while !end_fw
                 # Add end nucleotide, update current kmer.
                 get_fw_idxs!(fwn, current_kmer, kmerlist)
                 @debug "Extending unitig" fwn
-                push!(path_nodes,current_kmer)
+                push!(path_nodes,current_kmer_idx)
                 current_kmer = first(fwn).kmer
+                current_kmer_idx = first(fwn).idx
                 if used_kmers[first(fwn).idx]
                     @debug "New kmer is already used" current_kmer
                     break # Break circular contigs into lines.
@@ -379,24 +424,42 @@ function build_unitigs_from_kmerlist2!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{
                 push!(s, last(current_kmer))
                 end_fw = is_end_fw(current_kmer, kmerlist)
             end
-            push!(path_nodes,current_kmer)## end node is also stored
+            push!(path_nodes,current_kmer_idx)## end node is also stored
             get_fw_idxs!(fwn, current_kmer, kmerlist)
             if Base.length(fwn)==1 ## add the final node as well for 2-1 type nodes for finding consecutive contigs
                 push!(path_nodes,fwn[1].idx)
             end
+            coverage = get_coverage(path_nodes,kmercounts)
+            @info string("Found a contig starting from  ", path_nodes[1]," and ending at ", path_nodes[end]," with coverage " , coverage)
+
+            push!(all_paths,(path_nodes,s,coverage))
         end
         #add_node!(sg, canonical!(s)) lets not do it now
         ## here we have a path corresponding almost to sequence s we can combine
-        coverage = get_coverage(path_nodes,kmercounts)
-        @info string("Found a contig starting from  ", path_nodes[1]," and ending at ", path_nodes[end]," with coverage " , coverage)
 
-        push!(all_paths,(path_nodes,s,coverage))
     end
 
-    pop_bubbles!(all_paths)
-    new_contigs = find_new_contigs(all_paths)## returns a list of sequences
-    for s in new_contigs
-        add_node!(sg,canonical!(s))
+    new_contigs = pop_bubbles(all_paths,Base.length(kmerlist))
+    println("New Paths after popping:")
+    println(new_contigs)
+    println("Initial single kmers")
+    println(single_kmers)
+    for contig in new_contigs
+        if contig[1] in single_kmers
+            @info string("Skipping ", kmerlist[contig[1]] , " as it is contained in the single kmers list")
+            s = get_sequence(contig[2:end],kmerlist)
+            add_node!(sg,canonical!(s))
+            println(s)
+        else
+            s = get_sequence(contig[2:end],kmerlist)
+            add_node!(sg,canonical!(s))
+            println(s)
+        end
+    end
+
+    for single_kmer in single_kmers
+        println(kmerlist[single_kmer])
+        add_node!(sg,canonical!(BioSequence{DNAAlphabet{2}}(kmerlist[single_kmer])))
     end
     # A temporary check for circle problem for now.
     if !all(used_kmers)
@@ -522,7 +585,17 @@ function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where 
         end
     end
 end
-
+function new_graph_from_kmerlist2(kmerlist::Vector{DNAKmer{K}},kmer_counts::Vector{Int64}) where {K}
+    str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
+    @info string('C', str)
+    sg = GRAPH_TYPE()
+    build_unitigs_from_kmerlist2!(sg, kmerlist,kmer_counts)
+    if n_nodes(sg) > 1
+        connect_unitigs_by_overlaps!(sg, DNAKmer{K})
+    end
+    @info string("Done c", str)
+    return sg
+end
 
 function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
@@ -536,4 +609,4 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     return sg
 end
 SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}}) where {K} = new_graph_from_kmerlist(kmerlist)
-SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}},coverage::Vector{Int64}) where {K} = build_unitigs_from_kmerlist2!(GRAPH_TYPE(),kmerlist,coverage)
+SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}},coverage::Vector{Int64}) where {K} = new_graph_from_kmerlist2(kmerlist,coverage)
