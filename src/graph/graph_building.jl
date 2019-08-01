@@ -67,7 +67,7 @@ function is_end_bw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     @debug "Checking if kmer is end BW" mer
     next = Vector{Kidx{K}}()
     get_bw_idxs!(next, mer, merlist)
-    @debug "BW neighbours:" next
+    @info string("BW neighbours:", next, " for ", mer)
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_fw_idxs!(next, p, merlist)
@@ -76,11 +76,17 @@ function is_end_bw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     return false
 end
 
+function get_canonical_kmerlist!(kmerlist::Vector{DNAKmer{K}}) where{K}
+    kmerlist = map(canonical,kmerlist)
+    println(kmerlist)
+    return kmerlist
+end
+
 function is_end_fw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     @debug "Checking if kmer is end FW" mer
     next = Vector{Kidx{K}}()
     get_fw_idxs!(next, mer, merlist)
-    @debug "FW neighbours:" next
+    @info string("FW neighbours:" ,next, " for ", mer)
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_bw_idxs!(next, p, merlist)
@@ -122,6 +128,7 @@ end
 function get_bw_idxs!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{DNAKmer{K}}) where {K}
     empty!(out)
     for n in kmer_bw_neighbours(kmer)
+        @info string("Checking backward neighbor ", canonical(n) , "  for  ", kmer)
         cnext = canonical(n)
         cidx = min(searchsortedfirst(kmerlist, cnext), length(kmerlist))
         if @inbounds kmerlist[cidx] == cnext
@@ -134,6 +141,7 @@ function get_fw_idxs!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{D
     empty!(out)
     for n in kmer_fw_neighbours(kmer)
         cnext = canonical(n)
+        @info string("Checking forward neighbor ", canonical(n) , "  for  ", kmer)
         cidx = min(searchsortedfirst(kmerlist, cnext), length(kmerlist))
         if @inbounds kmerlist[cidx] == cnext
             push!(out, Kidx{K}(n, cidx))
@@ -489,12 +497,12 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
         end_fw = is_end_fw(start_kmer, kmerlist)
 
         if !end_bw && !end_fw
-            @debug "Kmer is middle of a unitig" start_kmer_idx start_kmer
+            @info string("Kmer is middle of a unitig: " ,start_kmer_idx ,"  ", start_kmer)
             continue
         end
 
         if end_bw && end_fw
-            @debug "Kmer is single unitig" start_kmer_idx start_kmer
+            @info string("Kmer is single unitig: ", start_kmer_idx ,"  ",start_kmer)
             # Kmer as unitig
             s = BioSequence{DNAAlphabet{2}}(start_kmer)
             used_kmers[start_kmer_idx] = true
@@ -507,7 +515,7 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
                 current_kmer = reverse_complement(start_kmer)
                 end_fw = end_bw
             end
-            @debug "Start of unitig" start_kmer current_kmer end_bw end_fw
+            @info string("Start of unitig: " ,start_kmer ,"  ",current_kmer,"  ",end_bw, "  ",end_fw)
             # Start unitig
             s = BioSequence{DNAAlphabet{2}}(current_kmer)
             fwn = Vector{Kidx{K}}()
@@ -601,6 +609,8 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
     @info string('C', str)
     sg = GRAPH_TYPE()
+    kmerlist = get_canonical_kmerlist!(kmerlist)
+    sort!(kmerlist)
     build_unitigs_from_kmerlist!(sg, kmerlist)
     if n_nodes(sg) > 1
         connect_unitigs_by_overlaps!(sg, DNAKmer{K})
