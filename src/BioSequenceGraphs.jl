@@ -5,6 +5,8 @@ module BioSequenceGraphs
 export
     ### Sequence Distance Graph
     SequenceDistanceGraph,
+    DistanceGraphLink,
+    SDGNode,
     # Basic queries and properties
     nodes,
     n_nodes,

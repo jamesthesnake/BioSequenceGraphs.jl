@@ -227,10 +227,10 @@ didn't exist in the graph, and so could not be removed.
 function remove_link!(sg::SequenceDistanceGraph, source::NodeID, dest::NodeID)
     slinks = links(sg, source)
     slinkslen = length(slinks)
-    filter!(!isequal(SequenceGraphLink(source, dest, 0)), slinks)
+    filter!(!isequal(DistanceGraphLink(source, dest, 0)), slinks)
     dlinks = links(sg, dest)
     dlinkslen = length(dlinks)
-    filter!(!isequal(SequenceGraphLink(dest, source, 0)), dlinks)
+    filter!(!isequal(DistanceGraphLink(dest, source, 0)), dlinks)
     return slinkslen != length(slinks) || dlinkslen != length(dlinks)
 end
 

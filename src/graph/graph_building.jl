@@ -340,6 +340,39 @@ function get_sequence(node_list,kmerlist)
     end
     s
 end
+
+## we get as input a sdg and first find all candidates ()
+function pop_bubbles2(sdg::SequenceDistanceGraph,coverage::Vector{Int64})
+    @assert n_nodes(sdg)==Base.length(coverage) "Coverage information is not available for each kmer"
+    candidates = Vector{Int64}()## candidate contigs are those which have 1 fw and 1 bw edge
+    start_ends = Vector{Tuple{Int64,Int64}}()
+    for i in eachindex(links(sdg))
+        links_ = links(sdg)[i]
+        println(links_)
+        if Base.length(links_)==2
+            if links_[1].source+links_[2].source==0 ## one forward one backward edge
+                push!(candidates,i)
+                push!(start_ends,(links_[1].destination,links_[2].destination))
+            end
+        end
+    end
+    for i in eachindex(candidates)
+        for j in i+1:Base.length(candidates)
+            if start_ends[i][1]==start_ends[j][1] &&  start_ends[i][2]==start_ends[j][2] ## bubble Found
+                @info string("Bubble found for contigs: " ,sequence(sdg,candidates[i]) , " and ", sequence(sdg,candidates[j]) )
+                if coverage[candidates[i]]<coverage[candidates[j]]
+                    @info string("Removing less covered node : ",sequence(sdg,candidates[i]) )
+                    remove_node!(sdg,candidates[i])
+                else
+                    @info string("Removing less covered node : ",sequence(sdg,candidates[j]) )
+                    remove_node!(sdg,candidates[j])
+                end
+            end
+        end
+    end
+
+end
+
 """
     build_unitigs_from_kmerlist2
 
