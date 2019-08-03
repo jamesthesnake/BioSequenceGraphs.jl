@@ -195,7 +195,7 @@ function remove_node!(sg::SequenceDistanceGraph{S}, n::NodeID) where {S<:Sequenc
         remove_link!(sg, source(oldlink), destination(oldlink))
     end
     # TODO: This is a lazy solution to getting rid of the node.
-    nodes[n] = empty_node(S)
+    nodes(sg)[n] = empty_node(S)
 end
 
 

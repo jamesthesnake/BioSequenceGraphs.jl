@@ -22,7 +22,7 @@
 
 struct Kidx{K}
     kmer::DNAKmer{K}
-    idx::UInt64
+    idx:: Int64
 end
 
 encoded_data(mer) = reinterpret(UInt64, mer)
@@ -63,11 +63,23 @@ function kmer_bw_neighbours(mer::DNAKmer{K}) where {K}
     return (DNAKmer{K}(base), DNAKmer{K}(base + (BT(1) << 2(K - 1))), DNAKmer{K}(base + (BT(2) << 2(K - 1))), DNAKmer{K}(base + (BT(3) << 2(K - 1))))
 end
 
+function is_end_bw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
+    @debug "Checking if kmer is end BW" mer
+    next = Vector{Kidx{K}}()
+    get_bw_idxs!(next, pref, merlist)
+    #@info string("BW neighbours:", next, " for ", mer)
+    length(next) != 1 && return true
+    @inbounds p = next[1].kmer
+    get_fw_idxs!(next, p, merlist)
+    @debug "FW neighbours of only BW neighbour:" p next
+    length(next) != 1 && return true
+    return false
+end
 function is_end_bw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     @debug "Checking if kmer is end BW" mer
     next = Vector{Kidx{K}}()
     get_bw_idxs!(next, mer, merlist)
-    @info string("BW neighbours:", next, " for ", mer)
+    #@info string("BW neighbours:", next, " for ", mer)
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_fw_idxs!(next, p, merlist)
@@ -81,16 +93,27 @@ function get_canonical_kmerlist!(kmerlist::Vector{DNAKmer{K}}) where{K}
     println(kmerlist)
     return kmerlist
 end
-
+function is_end_fw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
+    @debug "Checking if kmer is end FW" mer
+    next = Vector{Kidx{K}}()
+    get_fw_idxs!(next, suff, merlist)
+    #@info string("FW neighbours:" ,next, " for ", mer)
+    length(next) != 1 && return true
+    @inbounds p = next[1].kmer
+    get_bw_idxs!(next, p, merlist)
+    #@debug "BW neighbours of only FW neighbour:" p next
+    length(next) != 1 && return true
+    return false
+end
 function is_end_fw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     @debug "Checking if kmer is end FW" mer
     next = Vector{Kidx{K}}()
     get_fw_idxs!(next, mer, merlist)
-    @info string("FW neighbours:" ,next, " for ", mer)
+    #@info string("FW neighbours:" ,next, " for ", mer)
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
     get_bw_idxs!(next, p, merlist)
-    @debug "BW neighbours of only FW neighbour:" p next
+    #@debug "BW neighbours of only FW neighbour:" p next
     length(next) != 1 && return true
     return false
 end
@@ -128,7 +151,7 @@ end
 function get_bw_idxs!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{DNAKmer{K}}) where {K}
     empty!(out)
     for n in kmer_bw_neighbours(kmer)
-        @info string("Checking backward neighbor ", canonical(n) , "  for  ", kmer)
+        #@info string("Checking backward neighbor ", canonical(n) , "  for  ", kmer)
         cnext = canonical(n)
         cidx = min(searchsortedfirst(kmerlist, cnext), length(kmerlist))
         if @inbounds kmerlist[cidx] == cnext
@@ -141,7 +164,7 @@ function get_fw_idxs!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{D
     empty!(out)
     for n in kmer_fw_neighbours(kmer)
         cnext = canonical(n)
-        @info string("Checking forward neighbor ", canonical(n) , "  for  ", kmer)
+        #@info string("Checking forward neighbor ", canonical(n) , "  for  ", kmer)
         cidx = min(searchsortedfirst(kmerlist, cnext), length(kmerlist))
         if @inbounds kmerlist[cidx] == cnext
             push!(out, Kidx{K}(n, cidx))
@@ -341,18 +364,54 @@ function get_sequence(node_list,kmerlist)
     s
 end
 
+
+## check if two sequences have similarity above threshold
+## hamming distance based comparison
+function is_similar(seq1,seq2,threshold = 0.8)
+    c = 0
+    for (s1,s2) in zip(seq1,seq2)
+        if s1==s2
+            c+=1
+        end
+    end
+    if c/Base.length(seq1)>threshold
+        return true
+    end
+    return false
+end
+
+function get_links_with_deletes(sdg::SequenceDistanceGraph,n::NodeID)
+    links_ = links(sdg)[n]
+    nodes_ = nodes(sdg)
+    new_links = Vector{DistanceGraphLink}()
+    if nodes_[n].deleted
+        return 0
+    end
+    for l in links_
+        if !(nodes_[abs(l.destination)].deleted)
+             push!(new_links,l)
+         end
+    end
+    return new_links
+end
+## for later iterations we must check if the links/nodes are deleted or not
 ## we get as input a sdg and first find all candidates ()
 function pop_bubbles2(sdg::SequenceDistanceGraph,coverage::Vector{Int64})
-    @assert n_nodes(sdg)==Base.length(coverage) "Coverage information is not available for each kmer"
+    @assert n_nodes(sdg)==Base.length(coverage) "Coverage information is not available for each node"
     candidates = Vector{Int64}()## candidate contigs are those which have 1 fw and 1 bw edge
     start_ends = Vector{Tuple{Int64,Int64}}()
+    deleted = false ## to keep track whether we made any updates on this iteration
     for i in eachindex(links(sdg))
+        if nodes(sdg)[i].deleted ## skip deleted nodes
+            continue
+        end
         links_ = links(sdg)[i]
-        println(links_)
-        if Base.length(links_)==2
-            if links_[1].source+links_[2].source==0 ## one forward one backward edge
+        links_after_deletes = get_links_with_deletes(sdg,i)
+        @info string("Links of ",nodes(sdg)[i], "  : ", links_after_deletes)
+        if Base.length(links_after_deletes)==2
+            if links_[1].source+links_after_deletes[2].source==0 ## one forward one backward edge
                 push!(candidates,i)
-                push!(start_ends,(links_[1].destination,links_[2].destination))
+                push!(start_ends,(links_after_deletes[1].destination,links_after_deletes[2].destination))
             end
         end
     end
@@ -360,19 +419,172 @@ function pop_bubbles2(sdg::SequenceDistanceGraph,coverage::Vector{Int64})
         for j in i+1:Base.length(candidates)
             if start_ends[i][1]==start_ends[j][1] &&  start_ends[i][2]==start_ends[j][2] ## bubble Found
                 @info string("Bubble found for contigs: " ,sequence(sdg,candidates[i]) , " and ", sequence(sdg,candidates[j]) )
-                if coverage[candidates[i]]<coverage[candidates[j]]
-                    @info string("Removing less covered node : ",sequence(sdg,candidates[i]) )
-                    remove_node!(sdg,candidates[i])
-                else
-                    @info string("Removing less covered node : ",sequence(sdg,candidates[j]) )
-                    remove_node!(sdg,candidates[j])
+                if is_similar(sequence(sdg,candidates[i]),sequence(sdg,candidates[j]))
+                    @info string("Found similar branches!")
+                    deleted = true
+                    if coverage[candidates[i]]<coverage[candidates[j]]
+                        @info string("Removing less covered node : ",sequence(sdg,candidates[i]) )
+                        remove_node!(sdg,candidates[i])
+                    else
+                        @info string("Removing less covered node : ",sequence(sdg,candidates[j]) )
+                        remove_node!(sdg,candidates[j])
+                    end
                 end
             end
         end
     end
+    return sdg
+end
+function get_suffix(seq::BioSequence,K::Int64)
+    return DNAKmer{K}(seq[Base.length(seq)-K+1:end])
+end
+function get_prefix(seq::BioSequence,K::Int64)
+    return DNAKmer{K}(seq[1:K])
+end
+function get_suffixes(sg::GRAPH_TYPE,K::Int64)
+    Suffs = Vector{Tuple{DNAKmer{K},Int64}}()
+    for i in eachindex(nodes(sg))
+        node = nodes(sg)[i]
+        if node.deleted
+            push!(Suffs,(DNAKmer{K}("TTTT"),i))
+        else
+            suff = get_suffix(node.seq,K)
+            @info string("Adding suffix ", suff)
+            can = canonical(suff)
+            if can == suff
+                push!(Suffs,(can,i))
+            else
+                push!(Suffs,(can,-i))
+            end
+        end
+    end
+    return Suffs
+end
+function get_prefixes(sg::GRAPH_TYPE,K::Int64)
+    Prefs = Vector{Tuple{DNAKmer{K},Int64}}()
+    for i in eachindex(nodes(sg))
+        node = nodes(sg)[i]
+        println(node)
+        if node.deleted
+            push!(Prefs,(DNAKmer{K}("TTTT"),i))
+        else
+            pref = get_prefix(node.seq,K)
+            @info string("Adding prefix ", pref )
+            can = canonical(pref)
+            if can == pref
+                push!(Prefs,(can,i))
+            else
+                push!(Prefs,(can,-i))
+            end
+        end
+    end
 
+    return Prefs
 end
 
+function extend_seq(s1::BioSequence,s2)
+    for x in s2
+        push!(s1,x)
+    end
+    return s1
+end
+function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
+    @info string("Reconstructing unitigs from ", length(nodes(sg))," contigs with K : ",K)
+    nodes_ = nodes(sg)
+    sg2 = GRAPH_TYPE()
+    used_seqs = falses(Base.length(nodes_))
+    prefs = get_prefixes(sg,K)
+    suffs = get_suffixes(sg,K)
+    all_kmers_with_ids = vcat(prefs,suffs)
+    sort!(all_kmers_with_ids)
+    all_kmers = [tup[1] for tup in all_kmers_with_ids] ## get kmers from (kmer,index) tuples
+    @info string("All $K-mers: ", all_kmers)
+    for start_seq_idx in eachindex(nodes_)
+        @debug "Considering new sequence" start_seq_idx
+        if nodes_[start_seq_idx].deleted
+            @info string("Skipping the deleted node : " , nodes_[start_seq_idx])
+            used_seqs[start_seq_idx]= true
+            continue
+        end
+        # Any kmer can only occur in one unitig.
+        if used_seqs[start_seq_idx]
+            @info string("Contig has been used", start_seq_idx)
+            continue
+        end
+
+        # Check if the kmer is an end/junction of a unitig.
+        contig = nodes_[start_seq_idx].seq
+        start_sequence_pref = prefs[start_seq_idx][1]
+        start_sequence_suff = suffs[start_seq_idx][1]
+        end_bw = is_end_bw_seq(start_sequence_pref,start_sequence_suff, all_kmers)
+        end_fw = is_end_fw_seq(start_sequence_pref,start_sequence_suff, all_kmers)
+
+        if !end_bw && !end_fw
+            @info string("Contig is middle of a bigger contig: " ,start_seq_idx ,"  ", contig)
+            continue
+        end
+
+        if end_bw && end_fw
+            @info string("Contig is a single contig: ", start_seq_idx ,"  ",contig)
+            # Kmer as unitig
+            s = BioSequence{DNAAlphabet{2}}(contig)
+            used_seqs[start_seq_idx] = true
+        else
+            # A unitig starts on this kmer.
+            # Make sure the unitig starts on FW.
+            current_contig= contig
+            used_seqs[start_seq_idx] = true
+            if end_fw
+                current_contig = reverse_complement(contig)
+                end_fw = end_bw
+            end
+            @info string("Start of new unitig: " ,contig ,"  ",current_contig,"  ",end_bw, "  ",end_fw)
+            # Start unitig
+            s = BioSequence{DNAAlphabet{2}}(current_contig)
+            fwn = Vector{Kidx{K}}()
+
+            while !end_fw
+                # Add end nucleotide, update current kmer.
+                suff = get_suffix(current_contig,K)
+                pref  = get_prefix(current_contig,K)
+                get_fw_idxs2!(fwn, suff, all_kmers)
+                println("Real forward index")
+                fw_idx = first(fwn).idx
+                real_idx = all_kmers_with_ids[abs(first(fwn).idx)][2]
+                println(real_idx)
+                if fw_idx > 0
+                    fw_seq = nodes_[real_idx].seq
+                else
+                    fw_seq = canonical!(nodes_[abs(real_idx)].seq )
+                end
+                println("Forward sequence detected : ")
+                println(fw_seq)
+                @debug "Extending unitig" fw_seq
+                #current_contig = first(fwn).kmer
+                current_contig = fw_seq
+                if used_seqs[abs(real_idx)]
+                    @info string("New contig is already used", current_contig)
+                    break # Break circular contigs into lines.
+                end
+                used_seqs[abs(real_idx)] = true
+                @info string("Extending the unitig ", s , "  with ", current_contig)
+                #push!(s, last(current_contig))
+                extend_seq(s,current_contig[K:end])
+                @info string("After extending:  ", s )
+                suff = get_suffix(current_contig,K)
+                pref  = get_prefix(current_contig,K)
+                end_fw = is_end_fw_seq(pref,suff, all_kmers)
+            end
+        end
+        add_node!(sg2, canonical!(s))
+    end
+    # A temporary check for circle problem for now.
+    if !all(used_seqs)
+        @warn "Some kmers have not been incorporated into unitigs. This may be a case of the circle problem" all_kmers[(!).(used_seqs)]
+    end
+    @info string("Constructed ", length(nodes(sg)), " unitigs")
+    return sg2
+end
 """
     build_unitigs_from_kmerlist2
 
@@ -562,6 +774,7 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
                     break # Break circular contigs into lines.
                 end
                 used_kmers[first(fwn).idx] = true
+                @info string("Extending the unitig ", s , "  with ", current_kmer)
                 push!(s, last(current_kmer))
                 end_fw = is_end_fw(current_kmer, kmerlist)
             end
