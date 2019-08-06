@@ -34,7 +34,7 @@ The kmer size is set to 15.
 
 ```
 r = FASTQ.Reader(open("URnano_ecoli.fastq", "r"))
-Ecoli_reads = Set{BioSequence{DNAAlphabet{4}}}()
+Ecoli_reads = Vector{BioSequence{DNAAlphabet{4}}}()
 
 ## get first 5 reads
 for i in 1:5

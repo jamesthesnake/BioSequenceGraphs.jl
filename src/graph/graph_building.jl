@@ -63,6 +63,8 @@ function kmer_bw_neighbours(mer::DNAKmer{K}) where {K}
     return (DNAKmer{K}(base), DNAKmer{K}(base + (BT(1) << 2(K - 1))), DNAKmer{K}(base + (BT(2) << 2(K - 1))), DNAKmer{K}(base + (BT(3) << 2(K - 1))))
 end
 
+
+## at this point does not make use of both pref and suff but just in case
 function is_end_bw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     @debug "Checking if kmer is end BW" mer
     next = Vector{Kidx{K}}()
@@ -93,6 +95,10 @@ function get_canonical_kmerlist!(kmerlist::Vector{DNAKmer{K}}) where{K}
     println(kmerlist)
     return kmerlist
 end
+
+
+## at this point does not make use of both pref and suff but just in case
+## for checking fw neighbors of a sequence instead of a kmer
 function is_end_fw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     @debug "Checking if kmer is end FW" mer
     next = Vector{Kidx{K}}()
@@ -296,7 +302,7 @@ function delete_tips(kmerlist::Vector{DNAKmer{K}}) where {K}
             next_mer = kmerlist[next_ind]
             get_fw_idxs!(next, next_mer, kmerlist)
             get_bw_idxs!(next2, next_mer, kmerlist)
-            while Base.length(next)==1 && Base.length(next2)==1 ## At all the kmers on the simple path
+            while Base.length(next)==1 && Base.length(next2)==1 ## Add all the kmers on the simple path
                 next = vcat(next,next2)
                 push!(path,next_ind)
                 temp_mer = next_mer
@@ -394,6 +400,8 @@ function get_links_with_deletes(sdg::SequenceDistanceGraph,n::NodeID)
     end
     return new_links
 end
+
+
 ## for later iterations we must check if the links/nodes are deleted or not
 ## we get as input a sdg and first find all candidates ()
 function pop_bubbles2(sdg::SequenceDistanceGraph,coverage::Vector{Int64})
@@ -433,7 +441,7 @@ function pop_bubbles2(sdg::SequenceDistanceGraph,coverage::Vector{Int64})
             end
         end
     end
-    return sdg
+    return sdg ,deleted
 end
 function get_suffix(seq::BioSequence,K::Int64)
     return DNAKmer{K}(seq[Base.length(seq)-K+1:end])
@@ -488,10 +496,37 @@ function extend_seq(s1::BioSequence,s2)
     end
     return s1
 end
-function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
+
+## gets the sdg built from kmers initially
+## I think it is better to embed the coverage information inside the graph augment it??
+function error_correction(sdg::GRAPH_TYPE,K::Int64,coverage::Vector{Int64})
+    @assert Base.length(nodes(sdg))==Base.length(coverage) "Coverage information is missing for some nodes?"
+    deleted = false
+    extended = false
+    sdg, deleted  = pop_bubbles2(sdg,coverage)
+    while deleted || extended
+        deleted,extended = false,false
+        sdg,extended,coverage = build_unitigs_from_graph(sdg,K,coverage)
+        sdg, deleted  = pop_bubbles2(sdg,coverage)
+    end
+    sdg
+end
+
+"""
+     build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
+
+K : K value used to build the SDG initially (kmer length). This is used for getting the correct overlaps between nodes
+Build longer unitigs after popping the bubbles, returns True if any extension operation is performed
+This is the same functionality with build_unitigs_from_kmerlist, we just use unitigs instead of kmers
+
+"""
+
+function build_unitigs_from_graph(sg::GRAPH_TYPE,K::Int64,coverage::Vector{Int64})
     @info string("Reconstructing unitigs from ", length(nodes(sg))," contigs with K : ",K)
     nodes_ = nodes(sg)
     sg2 = GRAPH_TYPE()
+    update = false
+    new_coverages = Vector{Int64}()
     used_seqs = falses(Base.length(nodes_))
     prefs = get_prefixes(sg,K)
     suffs = get_suffixes(sg,K)
@@ -500,6 +535,7 @@ function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
     all_kmers = [tup[1] for tup in all_kmers_with_ids] ## get kmers from (kmer,index) tuples
     @info string("All $K-mers: ", all_kmers)
     for start_seq_idx in eachindex(nodes_)
+        covs = Vector{Int64}()
         @debug "Considering new sequence" start_seq_idx
         if nodes_[start_seq_idx].deleted
             @info string("Skipping the deleted node : " , nodes_[start_seq_idx])
@@ -508,7 +544,7 @@ function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
         end
         # Any kmer can only occur in one unitig.
         if used_seqs[start_seq_idx]
-            @info string("Contig has been used", start_seq_idx)
+            @info string("Contig has been used: ", start_seq_idx, "  ", all_kmers[start_seq_idx])
             continue
         end
 
@@ -518,7 +554,6 @@ function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
         start_sequence_suff = suffs[start_seq_idx][1]
         end_bw = is_end_bw_seq(start_sequence_pref,start_sequence_suff, all_kmers)
         end_fw = is_end_fw_seq(start_sequence_pref,start_sequence_suff, all_kmers)
-
         if !end_bw && !end_fw
             @info string("Contig is middle of a bigger contig: " ,start_seq_idx ,"  ", contig)
             continue
@@ -528,10 +563,12 @@ function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
             @info string("Contig is a single contig: ", start_seq_idx ,"  ",contig)
             # Kmer as unitig
             s = BioSequence{DNAAlphabet{2}}(contig)
+            push!(covs,coverage[start_seq_idx])
             used_seqs[start_seq_idx] = true
         else
             # A unitig starts on this kmer.
             # Make sure the unitig starts on FW.
+            push!(covs,coverage[start_seq_idx])
             current_contig= contig
             used_seqs[start_seq_idx] = true
             if end_fw
@@ -559,7 +596,7 @@ function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
                 end
                 println("Forward sequence detected : ")
                 println(fw_seq)
-                @debug "Extending unitig" fw_seq
+                @debug "May extend unitig" fw_seq
                 #current_contig = first(fwn).kmer
                 current_contig = fw_seq
                 if used_seqs[abs(real_idx)]
@@ -571,11 +608,15 @@ function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
                 #push!(s, last(current_contig))
                 extend_seq(s,current_contig[K:end])
                 @info string("After extending:  ", s )
+                update = true
+                push!(covs,coverage[real_idx])
                 suff = get_suffix(current_contig,K)
                 pref  = get_prefix(current_contig,K)
                 end_fw = is_end_fw_seq(pref,suff, all_kmers)
             end
         end
+        sort!(covs)
+        push!(new_coverages,covs[Int64(ceil(Base.length(covs)/2))])
         add_node!(sg2, canonical!(s))
     end
     # A temporary check for circle problem for now.
@@ -583,7 +624,7 @@ function build_unitigs_from_graph!(sg::GRAPH_TYPE,K::Int64)
         @warn "Some kmers have not been incorporated into unitigs. This may be a case of the circle problem" all_kmers[(!).(used_seqs)]
     end
     @info string("Constructed ", length(nodes(sg)), " unitigs")
-    return sg2
+    return sg2,update,new_coverages
 end
 """
     build_unitigs_from_kmerlist2
@@ -723,6 +764,42 @@ function build_unitigs_from_kmerlist2!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{
 end
 
 
+
+
+```
+    extract_kmerlist(read_list::Vector{BioSequence{A}},k::Int64)where{A}
+
+    Returns two lists kmer_list and kmer_coverage which contain all the kmers and their coverage respectively
+
+```
+function extract_kmerlist(read_list::Vector{BioSequence{A}},k::Int64)where{A}
+    T = eltype(A)
+    kmer_dict = Dict{DNAKmer{k},Int64}()
+    for seq in read_list
+        kmer_iterator = each(Kmer{T,k},seq)
+        kmer_state = iterate(kmer_iterator) ## initialize
+        while kmer_state!=nothing
+            kmer = kmer_state[1][2]
+            if haskey(kmer_dict,kmer)
+                kmer_dict[kmer] += 1
+            else
+                kmer_dict[kmer] = 1
+            start_ind = kmer_state[1][1]
+            new_state= (start_ind,1,UInt64(0))
+            kmer_state = iterate(kmer_iterator,new_state)
+            end
+        end
+    end
+    kmer_list = Vector{DNAKmer{k}}()
+    kmer_coverage = Vector{Int64}()
+    for kmer in keys(kmer_dict)
+        push!(kmer_list,kmer)
+        push!(kmer_coverage,kmer_dict[kmer])
+    end
+    return kmer_list,kmer_coverage
+end
+
+
 function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K}}) where {K}
     @info string("Constructing unitigs from ", length(kmerlist), " ", K, "-mers")
     used_kmers = falses(length(kmerlist))
@@ -839,6 +916,64 @@ function connect_unitigs_by_overlaps!(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where 
         end
     end
 end
+
+
+
+function graph_from_fastq(fastq_file_name, read_num ::Int64,K::Int64,error::Bool)
+    r = FASTQ.Reader(open(fastq_file_name, "r"))
+    fastq_reads = Vector{BioSequence{DNAAlphabet{4}}}()
+    @info string("Getting ", read_num, " reads from " , fastq_file_name)
+    for i in 1:read_num
+        next_seq = iterate(r)
+        seq = BioSequences.sequence(next_seq[1])
+        println(seq)
+        next_seq = iterate(r,next_seq[2])
+        push!(fastq_reads,seq)
+    end
+    kmerlist,kmer_coverage = extract_kmerlist(fastq_reads,K)
+    @info string("Extracted " ,Base.length(kmerlist)," ",K ,"-mers ")
+    new_graph_from_kmerlist_with_error_correction(kmerlist,kmer_coverage,error)
+end
+
+function new_graph_from_kmerlist_with_error_correction(kmerlist::Vector{DNAKmer{K}},kmer_coverage::Vector{Int64},error::Bool) where {K}
+    str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
+    @info string('C', str)
+    sg = GRAPH_TYPE()
+    kmerlist = get_canonical_kmerlist!(kmerlist)
+    sort!(kmerlist)
+    build_unitigs_from_kmerlist!(sg, kmerlist)
+    if n_nodes(sg) > 1
+        connect_unitigs_by_overlaps!(sg, DNAKmer{K})
+    end
+    @info string("Done c", str)
+    @info string(sg)
+    if error
+        @info string("Starting Graph simplification")
+        @info string("Using randomly generated coverage information")
+        random_coverage = generate_coverage(Base.length(nodes(sg)))
+        sg = error_correction(sg,K,random_coverage)
+        #sg = error_correction(sg,K,kmer_coverage)
+        @info string("Graph simplification completed")
+    end
+    save_name = "graph1.fasta"
+    @info string("Saving graph to: $save_name ")
+    save_graph(sg,save_name)
+    sg
+end
+
+## saves each node on the graph
+
+function save_graph(sg::SequenceDistanceGraph,save_name::String)
+    f = open(save_name,"w")
+    nodes_ = nodes(sg)
+    for i in eachindex(nodes_)
+        node = nodes_[i]
+        seq = String(node.seq)
+        write(f,">$i\n")
+        write(f,"$seq\n")
+    end
+    close(f)
+end
 function new_graph_from_kmerlist2(kmerlist::Vector{DNAKmer{K}},kmer_counts::Vector{Int64}) where {K}
     str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
     @info string('C', str)
@@ -850,6 +985,7 @@ function new_graph_from_kmerlist2(kmerlist::Vector{DNAKmer{K}},kmer_counts::Vect
     @info string("Done c", str)
     return sg
 end
+
 
 function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
@@ -864,5 +1000,8 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
     @info string("Done c", str)
     return sg
 end
+
+SequenceDistanceGraph(fastq_file_name::String,read_num::Int64,K::Int64,error::Bool)= graph_from_fastq(fastq_file_name, read_num,K,error)
+SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}},error::Bool) where {K} = new_graph_from_kmerlist_with_error_correction(kmerlist,error)
 SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}}) where {K} = new_graph_from_kmerlist(kmerlist)
 SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}},coverage::Vector{Int64}) where {K} = new_graph_from_kmerlist2(kmerlist,coverage)
