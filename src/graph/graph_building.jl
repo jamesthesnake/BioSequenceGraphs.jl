@@ -800,13 +800,15 @@ function extract_kmerlist(read_list::Vector{BioSequence{A}},k::Int64)where{A}
 end
 
 
-function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K}}) where {K}
+function build_unitigs_from_kmerlist(sg::GRAPH_TYPE, kmerlist_cover::Vector{DNAKmer{K}}) where {K}
     @info string("Constructing unitigs from ", length(kmerlist), " ", K, "-mers")
+    @assert Base.length(kmer_coverage)==Base.length(kmerlist) "Kmer coverage is not matched for each kmer"
     used_kmers = falses(length(kmerlist))
-
+    coverages = Vector{Int64}()
+    kmerlist= [kmer[0] for kmer in kmerlist_cover]
     for start_kmer_idx in eachindex(kmerlist)
         @debug "Considering new kmer" start_kmer_idx
-
+        kmercovers = Vector{Int64}()
         # Any kmer can only occur in one unitig.
         if used_kmers[start_kmer_idx]
             @debug "Kmer has been used" start_kmer_idx
@@ -828,11 +830,13 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
             # Kmer as unitig
             s = BioSequence{DNAAlphabet{2}}(start_kmer)
             used_kmers[start_kmer_idx] = true
+            push!(kmercovers,kmer_list_cover[start_kmer_idx][1])
         else
             # A unitig starts on this kmer.
             # Make sure the unitig starts on FW.
             current_kmer = start_kmer
             used_kmers[start_kmer_idx] = true
+            push!(kmercovers,kmer_list_cover[start_kmer_idx][1])
             if end_fw
                 current_kmer = reverse_complement(start_kmer)
                 end_fw = end_bw
@@ -851,19 +855,22 @@ function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K
                     break # Break circular contigs into lines.
                 end
                 used_kmers[first(fwn).idx] = true
+                push!(kmercovers,kmer_list_cover[first(fwn).idx][1])
                 @info string("Extending the unitig ", s , "  with ", current_kmer)
                 push!(s, last(current_kmer))
                 end_fw = is_end_fw(current_kmer, kmerlist)
             end
         end
         add_node!(sg, canonical!(s))
+        @info string("Taking mean of  coverages : ",kmercovers)
+        push!(coverages,mean(kmercovers))
     end
     # A temporary check for circle problem for now.
     if !all(used_kmers)
         @warn "Some kmers have not been incorporated into unitigs. This may be a case of the circle problem" kmerlist[(!).(used_kmers)]
     end
     @info string("Constructed ", length(nodes(sg)), " unitigs")
-    return sg
+    return sg,coverages
 end
 
 function find_unitig_overlaps(sg::GRAPH_TYPE, ::Type{DNAKmer{K}}) where {K}
@@ -939,9 +946,11 @@ function new_graph_from_kmerlist_with_error_correction(kmerlist::Vector{DNAKmer{
     str = string("onstructing Sequence Distance Graph from ", length(kmerlist), ' ', K, "-mers")
     @info string('C', str)
     sg = GRAPH_TYPE()
+
     kmerlist = get_canonical_kmerlist!(kmerlist)
-    sort!(kmerlist)
-    build_unitigs_from_kmerlist!(sg, kmerlist)
+    kmer_list_cover = [(kmer,cov) for kmer,cov in zip(kmerlist,kmer_coverage)]
+    sort!(kmerlist_cover)
+    sg, coverages = build_unitigs_from_kmerlist!(sg, kmerlist_cover)
     if n_nodes(sg) > 1
         connect_unitigs_by_overlaps!(sg, DNAKmer{K})
     end
@@ -950,8 +959,8 @@ function new_graph_from_kmerlist_with_error_correction(kmerlist::Vector{DNAKmer{
     if error
         @info string("Starting Graph simplification")
         @info string("Using randomly generated coverage information")
-        random_coverage = generate_coverage(Base.length(nodes(sg)))
-        sg = error_correction(sg,K,random_coverage)
+        #random_coverage = generate_coverage(Base.length(nodes(sg)))
+        sg = error_correction(sg,K,coverages)
         #sg = error_correction(sg,K,kmer_coverage)
         @info string("Graph simplification completed")
     end
