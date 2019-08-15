@@ -1,0 +1,140 @@
+H	VN:Z:1.0
+H	VN:Z:1.0
+S	seq1	LN:i:20	UR:Z:graph1.fasta
+S	seq2	LN:i:20	UR:Z:graph1.fasta
+S	seq3	LN:i:20	UR:Z:graph1.fasta
+S	seq4	LN:i:20	UR:Z:graph1.fasta
+S	seq5	LN:i:20	UR:Z:graph1.fasta
+S	seq6	LN:i:20	UR:Z:graph1.fasta
+S	seq7	LN:i:20	UR:Z:graph1.fasta
+S	seq8	LN:i:20	UR:Z:graph1.fasta
+S	seq9	LN:i:20	UR:Z:graph1.fasta
+S	seq10	LN:i:20	UR:Z:graph1.fasta
+S	seq11	LN:i:20	UR:Z:graph1.fasta
+S	seq12	LN:i:20	UR:Z:graph1.fasta
+S	seq13	LN:i:20	UR:Z:graph1.fasta
+S	seq14	LN:i:20	UR:Z:graph1.fasta
+S	seq15	LN:i:20	UR:Z:graph1.fasta
+S	seq16	LN:i:20	UR:Z:graph1.fasta
+S	seq17	LN:i:20	UR:Z:graph1.fasta
+S	seq18	LN:i:20	UR:Z:graph1.fasta
+S	seq19	LN:i:20	UR:Z:graph1.fasta
+S	seq20	LN:i:20	UR:Z:graph1.fasta
+S	seq21	LN:i:20	UR:Z:graph1.fasta
+S	seq22	LN:i:20	UR:Z:graph1.fasta
+S	seq23	LN:i:28	UR:Z:graph1.fasta
+S	seq24	LN:i:20	UR:Z:graph1.fasta
+S	seq25	LN:i:20	UR:Z:graph1.fasta
+S	seq26	LN:i:20	UR:Z:graph1.fasta
+S	seq27	LN:i:20	UR:Z:graph1.fasta
+S	seq28	LN:i:20	UR:Z:graph1.fasta
+S	seq29	LN:i:20	UR:Z:graph1.fasta
+S	seq30	LN:i:20	UR:Z:graph1.fasta
+S	seq31	LN:i:20	UR:Z:graph1.fasta
+S	seq32	LN:i:20	UR:Z:graph1.fasta
+S	seq33	LN:i:20	UR:Z:graph1.fasta
+S	seq34	LN:i:11	UR:Z:graph1.fasta
+S	seq35	LN:i:20	UR:Z:graph1.fasta
+S	seq36	LN:i:20	UR:Z:graph1.fasta
+S	seq37	LN:i:20	UR:Z:graph1.fasta
+S	seq38	LN:i:20	UR:Z:graph1.fasta
+S	seq39	LN:i:20	UR:Z:graph1.fasta
+S	seq40	LN:i:20	UR:Z:graph1.fasta
+S	seq41	LN:i:20	UR:Z:graph1.fasta
+S	seq42	LN:i:20	UR:Z:graph1.fasta
+S	seq43	LN:i:20	UR:Z:graph1.fasta
+S	seq44	LN:i:20	UR:Z:graph1.fasta
+S	seq45	LN:i:20	UR:Z:graph1.fasta
+S	seq46	LN:i:11	UR:Z:graph1.fasta
+S	seq47	LN:i:19	UR:Z:graph1.fasta
+S	seq48	LN:i:20	UR:Z:graph1.fasta
+S	seq49	LN:i:20	UR:Z:graph1.fasta
+S	seq50	LN:i:13	UR:Z:graph1.fasta
+S	seq51	LN:i:20	UR:Z:graph1.fasta
+S	seq52	LN:i:13	UR:Z:graph1.fasta
+S	seq53	LN:i:20	UR:Z:graph1.fasta
+S	seq54	LN:i:20	UR:Z:graph1.fasta
+S	seq55	LN:i:20	UR:Z:graph1.fasta
+S	seq56	LN:i:20	UR:Z:graph1.fasta
+S	seq57	LN:i:20	UR:Z:graph1.fasta
+S	seq58	LN:i:20	UR:Z:graph1.fasta
+S	seq59	LN:i:20	UR:Z:graph1.fasta
+S	seq60	LN:i:20	UR:Z:graph1.fasta
+S	seq61	LN:i:20	UR:Z:graph1.fasta
+S	seq62	LN:i:20	UR:Z:graph1.fasta
+S	seq63	LN:i:20	UR:Z:graph1.fasta
+S	seq64	LN:i:20	UR:Z:graph1.fasta
+S	seq65	LN:i:20	UR:Z:graph1.fasta
+S	seq66	LN:i:20	UR:Z:graph1.fasta
+S	seq67	LN:i:20	UR:Z:graph1.fasta
+S	seq68	LN:i:20	UR:Z:graph1.fasta
+S	seq69	LN:i:20	UR:Z:graph1.fasta
+S	seq70	LN:i:20	UR:Z:graph1.fasta
+S	seq71	LN:i:20	UR:Z:graph1.fasta
+S	seq72	LN:i:20	UR:Z:graph1.fasta
+S	seq73	LN:i:20	UR:Z:graph1.fasta
+S	seq74	LN:i:20	UR:Z:graph1.fasta
+S	seq75	LN:i:20	UR:Z:graph1.fasta
+S	seq76	LN:i:19	UR:Z:graph1.fasta
+S	seq77	LN:i:20	UR:Z:graph1.fasta
+S	seq78	LN:i:20	UR:Z:graph1.fasta
+S	seq79	LN:i:20	UR:Z:graph1.fasta
+S	seq80	LN:i:20	UR:Z:graph1.fasta
+S	seq81	LN:i:20	UR:Z:graph1.fasta
+S	seq82	LN:i:20	UR:Z:graph1.fasta
+S	seq83	LN:i:20	UR:Z:graph1.fasta
+S	seq84	LN:i:20	UR:Z:graph1.fasta
+S	seq85	LN:i:20	UR:Z:graph1.fasta
+S	seq86	LN:i:20	UR:Z:graph1.fasta
+S	seq87	LN:i:20	UR:Z:graph1.fasta
+S	seq88	LN:i:20	UR:Z:graph1.fasta
+S	seq89	LN:i:20	UR:Z:graph1.fasta
+S	seq90	LN:i:20	UR:Z:graph1.fasta
+S	seq91	LN:i:19	UR:Z:graph1.fasta
+S	seq92	LN:i:20	UR:Z:graph1.fasta
+S	seq93	LN:i:20	UR:Z:graph1.fasta
+S	seq94	LN:i:15	UR:Z:graph1.fasta
+S	seq95	LN:i:17	UR:Z:graph1.fasta
+S	seq96	LN:i:20	UR:Z:graph1.fasta
+S	seq97	LN:i:19	UR:Z:graph1.fasta
+S	seq98	LN:i:20	UR:Z:graph1.fasta
+S	seq99	LN:i:12	UR:Z:graph1.fasta
+S	seq100	LN:i:11	UR:Z:graph1.fasta
+S	seq101	LN:i:20	UR:Z:graph1.fasta
+S	seq102	LN:i:17	UR:Z:graph1.fasta
+S	seq103	LN:i:20	UR:Z:graph1.fasta
+S	seq104	LN:i:20	UR:Z:graph1.fasta
+S	seq105	LN:i:11	UR:Z:graph1.fasta
+S	seq106	LN:i:11	UR:Z:graph1.fasta
+S	seq107	LN:i:11	UR:Z:graph1.fasta
+S	seq108	LN:i:20	UR:Z:graph1.fasta
+L	seq34	+	seq50	+	10M
+L	seq34	+	seq91	+	10M
+L	seq34	+	seq50	+	10M
+L	seq34	+	seq91	+	10M
+L	seq47	+	seq106	+	10M
+L	seq47	+	seq106	+	10M
+L	seq76	+	seq106	+	10M
+L	seq76	+	seq106	+	10M
+L	seq94	-	seq99	+	10M
+L	seq94	-	seq100	+	10M
+L	seq94	-	seq99	+	10M
+L	seq94	-	seq100	+	10M
+L	seq99	+	seq52	-	10M
+L	seq99	+	seq95	+	10M
+L	seq99	-	seq105	+	10M
+L	seq99	+	seq52	-	10M
+L	seq99	+	seq95	+	10M
+L	seq99	-	seq105	+	10M
+L	seq100	-	seq105	+	10M
+L	seq100	+	seq107	+	10M
+L	seq100	-	seq105	+	10M
+L	seq100	+	seq107	+	10M
+L	seq102	+	seq50	+	10M
+L	seq102	+	seq91	+	10M
+L	seq102	+	seq50	+	10M
+L	seq102	+	seq91	+	10M
+L	seq107	+	seq52	-	10M
+L	seq107	+	seq95	+	10M
+L	seq107	+	seq52	-	10M
+L	seq107	+	seq95	+	10M

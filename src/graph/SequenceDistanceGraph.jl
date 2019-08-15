@@ -311,6 +311,7 @@ function get_previous_nodes(sg::SequenceDistanceGraph, n::NodeID)
 end
 
 function dump_to_gfa1(sg, filename)
+    @info string("Saving graph to ", filename)
     fasta_filename = "$filename.fasta"
     gfa = open("$filename.gfa", "w")
     fasta = open(FASTA.Writer, fasta_filename)

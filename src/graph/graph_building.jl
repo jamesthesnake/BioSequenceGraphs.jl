@@ -65,15 +65,19 @@ end
 
 
 ## at this point does not make use of both pref and suff but just in case
-function is_end_bw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
+function is_end_bw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, forward_cands_with_ids::Vector{Tuple{DNAKmer{K},Int64}},backward_cands_with_ids::Vector{Tuple{DNAKmer{K},Int64}}) where {K}
     @info string("Checking if kmer is end BW: ", pref)
     @info string("Suffix is", suff)
     next = Vector{Kidx{K}}()
-    get_bw_idxs!(next, pref, merlist)
+    pref2 = pref
+    get_bw_idxs2!(next, pref2, backward_cands_with_ids)
+    get_fw_idxs2!(next, reverse_complement(pref2), forward_cands_with_ids)
     #@info string("BW neighbours:", next, " for ", mer)
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
-    get_fw_idxs!(next, p, merlist)
+
+    get_fw_idxs2!(next, p, forward_cands_with_ids)
+    get_bw_idxs2!(next, reverse_complement(p), backward_cands_with_ids)
     @debug "FW neighbours of only BW neighbour:" p next
     length(next) != 1 && return true
     return false
@@ -101,16 +105,19 @@ end
 
 ## at this point does not make use of both pref and suff but just in case
 ## for checking fw neighbors of a sequence instead of a kmer
-function is_end_fw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
+function is_end_fw_seq(pref::DNAKmer{K},suff::DNAKmer{K}, forward_cands_with_ids::Vector{Tuple{DNAKmer{K},Int64}},backward_cands_with_ids::Vector{Tuple{DNAKmer{K},Int64}})where {K}
 
     @info string("Checking if kmer is end FW: ", suff)
     @info string("pref is ", pref)
     next = Vector{Kidx{K}}()
-    get_fw_idxs!(next, suff, merlist)
+    suff2 = suff
+    get_fw_idxs2!(next, suff2, forward_cands_with_ids)
+    get_bw_idxs2!(next, reverse_complement(suff2), backward_cands_with_ids)
     #@info string("FW neighbours:" ,next, " for ", mer)
     length(next) != 1 && return true
     @inbounds p = next[1].kmer
-    get_bw_idxs!(next, p, merlist)
+    get_bw_idxs2!(next, p, backward_cands_with_ids)
+    get_fw_idxs2!(next, reverse_complement(p), forward_cands_with_ids)
     #@debug "BW neighbours of only FW neighbour:" p next
     length(next) != 1 && return true
     return false
@@ -128,32 +135,34 @@ function is_end_fw(mer::DNAKmer{K}, merlist::Vector{DNAKmer{K}}) where {K}
     return false
 end
 
-function get_bw_idxs2!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{DNAKmer{K}}) where {K}
+function get_bw_idxs2!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{Tuple{DNAKmer{K},Int64}}) where {K}
     empty!(out)
+    kmers = [k[1] for k in kmerlist]
     direction_flag = 1
     for n in kmer_bw_neighbours(kmer)
-        cnext = canonical(n)
+        cnext = n
         if n!=cnext
             direction_flag = -1
         end
-        cidx = min(searchsortedfirst(kmerlist, cnext), length(kmerlist))
+        cidx = min(searchsortedfirst(kmers, cnext), length(kmers))
         if @inbounds kmerlist[cidx] == cnext
-            push!(out, Kidx{K}(n, cidx*direction_flag))
+            push!(out, Kidx{K}(n, direction_flag*kmerlist[cidx][2]))
         end
     end
 end
 
-function get_fw_idxs2!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{DNAKmer{K}}) where {K}
+function get_fw_idxs2!(out::Vector{Kidx{K}}, kmer::DNAKmer{K}, kmerlist::Vector{Tuple{DNAKmer{K},Int64}}) where {K}
     empty!(out)
+    kmers = [k[1] for k in kmerlist]
     direction_flag = 1
     for n in kmer_fw_neighbours(kmer)
-        cnext = canonical(n)
+        cnext = n
         if n!=cnext
             direction_flag = -1 ## This is used to traverse the unitig properly
         end
-        cidx = min(searchsortedfirst(kmerlist, cnext), length(kmerlist))
+        cidx = min(searchsortedfirst(kmers, cnext), length(kmers))
         if @inbounds kmerlist[cidx] == cnext
-            push!(out, Kidx{K}(n, cidx*direction_flag))
+            push!(out, Kidx{K}(n, direction_flag*kmerlist[cidx][2]))
         end
     end
 end
@@ -273,6 +282,44 @@ function pop_bubbles(all_paths,kmer_num)
     return new_contigs
 end
 
+
+"""
+For sequences longer than initial kmers we can not naively check the overlaps between them
+using the same functions designed for Kmers. This is because direction becomes an issue.
+
+In order to be a backward neighbor the overlap must be between the reverse complement of the prefix of a sequence
+or the suffix of the sequence itself. Otherwise the overlap is contained inside the sequence and is not a valid overlap.
+
+Thus for each edge we produce 2 candidates that can be considered for backward neighbor search
+
+"""
+function backward_candidates(sdg::SequenceDistanceGraph,K::Int64)
+    cands = Vector{Tuple{DNAKmer{K},Int64}}()
+    l = Base.length(nodes(sdg))
+    nodes_ = nodes(sdg)
+    for i in eachindex(l)
+        kpref = DNAKmer{K}(reverse_complement(sequence(nodes_[i])[1:K]))
+        ksuff = DNAKmer{K}(sequence(nodes_[i])[Base.length(sequence(nodes_[i]))-K+1:end])
+        push!(cands,(kpref,-i))
+        push!(cands,(ksuff,i))
+    end
+    return cands
+end
+
+function forward_candidates(sdg::SequenceDistanceGraph,K::Int64)
+    cands = Vector{Tuple{DNAKmer{K},Int64}}()
+    l = Base.length(nodes(sdg))
+    nodes_ = nodes(sdg)
+    for i in eachindex(l)
+        kpref = DNAKmer{K}(sequence(nodes_[i])[1:K])
+        ksuff = DNAKmer{K}(reverse_complement(sequence(nodes_[i])[Base.length(sequence(nodes_[i]))-K+1:end]))
+        push!(cands,(kpref,i))
+        push!(cands,(ksuff,-i))
+    end
+    return cands
+end
+
+
 ## Tip removal
 """
 Delete the shorter tip or delete the tip with low coverage
@@ -288,6 +335,12 @@ function delete_tips_graph(sdg::SequenceDistanceGraph,coverage :: Vector{Int64},
     used_seqs = falses(Base.length(nodes_))
     prefs = get_prefixes(sdg,K)
     suffs = get_suffixes(sdg,K)
+    forward_cands_with_ids   = forward_candidates(sdg,K)
+    backward_cands_with_ids  = backward_candidates(sdg,K)
+    sort!(forward_cands_with_ids)
+    sort!(backward_cands_with_ids)
+    #back_cands = [x[1] for x in backward_cands_with_ids]
+    #forw_cands = [x[1] for x in forward_cands_with_ids]
     parents = Vector{Int64}()
     tips = Vector{Tuple{Int64,Int64}}()
     all_kmers_with_ids = vcat(prefs,suffs)
@@ -299,27 +352,25 @@ function delete_tips_graph(sdg::SequenceDistanceGraph,coverage :: Vector{Int64},
             @info string("Skipping deleted node ", start_seq_idx)
             continue
         end
-        start_sequence_pref = prefs[start_seq_idx]
-        start_sequence_suff = suffs[start_seq_idx]
+        #start_sequence_pref = prefs[start_seq_idx]
+        #start_sequence_suff = suffs[start_seq_idx]
+        pref_seq = get_prefix(nodes_[start_seq_idx].seq,K)
+        rev_pref_seq = reverse_complement(pref_seq)
+        suff_seq = get_suffix(nodes_[start_seq_idx].seq,K)
+        rev_suff_seq = reverse_complement(suff_seq)
         next = Vector{Kidx{K}}()
         next2 = Vector{Kidx{K}}()
-        if start_sequence_pref[2]<0
-            get_fw_idxs!(next, start_sequence_pref[1], all_kmers)
-        else
-            get_bw_idxs!(next, start_sequence_pref[1], all_kmers)
-        end
-        if start_sequence_suff[2]<0
-            get_bw_idxs!(next2, start_sequence_suff[1], all_kmers)
-        else
-            get_fw_idxs!(next2, start_sequence_suff[1], all_kmers)
-        end
+        get_bw_idxs2!(next,pref_seq,backward_cands_with_ids)
+        get_fw_idxs2!(next,rev_pref_seq,forward_cands_with_ids)
+        get_fw_idxs2!(next2,suff_seq,forward_cands_with_ids)
+        get_bw_idxs2!(next2,rev_suff_seq,backward_cands_with_ids)
         #next2 = Vector{Kidx{K}}() # not used
         #get_bw_idxs!(next2, start_sequence_pref, all_kmers)
         @info string("Backward neighbors of ", start_sequence_pref[1], " is: ", next)
         @info string("Forward  neighbors of ", start_sequence_suff[1], " is: ", next2)
         if (Base.length(next)==0 && Base.length(next2)==1) || (Base.length(next)==1 && Base.length(next2)==0)
             pars_ = vcat(next,next2)
-            parent = all_kmers_with_ids[pars_[1].idx][2]
+            parent = first(pars_)[2]
             @info string(nodes_[start_seq_idx] , " is a tip contig!! with parent: ", parent)
             push!(tips,(parent,start_seq_idx))
             push!(parents,parent)
@@ -571,7 +622,7 @@ function get_prefixes(sg::GRAPH_TYPE,K::Int64)
     return Prefs
 end
 
-function extend_seq(s1::BioSequence,s2)
+function extend_seq!(s1::BioSequence,s2)
     for x in s2
         push!(s1,x)
     end
@@ -587,22 +638,31 @@ function error_correction(sdg::GRAPH_TYPE,K::Int64,coverage::Vector{Int64})
     extended = false
     sdg, deleted  = pop_bubbles2(sdg,coverage)
     tips_deleted = true
+    count_tips = 0
+    count_popping = 0
     while tips_deleted
-        while tips_deleted || deleted || extended
-            tips_deleted,deleted,extended = false,false,false
+        sdg,extended,coverage = build_unitigs_from_graph(sdg,K,coverage)
+        sdg, deleted  = pop_bubbles2(sdg,coverage)
+        connect_unitigs_by_overlaps!(sdg, DNAKmer{K})
+        @info string("Constructed the links between new unitigs")
+        while deleted || extended
+            #tips_deleted,deleted,extended = false,false,false
             sdg,extended,coverage = build_unitigs_from_graph(sdg,K,coverage)
             sdg, deleted  = pop_bubbles2(sdg,coverage)
+            count_popping+=1
         end
         sdg, tips_deleted = delete_tips_graph(sdg,coverage,K)
+        count_tips+=1
         #tips_deleted = false
     end
+    @info string(count_tips," times tips removed and ", count_popping, " times bubble popping is performed")
     sdg
 end
 
 """
      build_unitigs_from_graph(sg::GRAPH_TYPE,K::Int64)
 
-K : K value used to build the SDG initially (kmer length). This is used for getting the correct overlaps between nodes
+K : K value that is used to build the SDG initially (kmer length). This is used for getting the correct overlaps between nodes
 Build longer unitigs after popping the bubbles, returns True if any extension operation is performed
 This is the same functionality with build_unitigs_from_kmerlist, we just use unitigs instead of kmers
 
@@ -618,9 +678,14 @@ function build_unitigs_from_graph(sg::GRAPH_TYPE,K::Int64,coverage::Vector{Int64
     prefs = get_prefixes(sg,K)
     suffs = get_suffixes(sg,K)
     all_kmers_with_ids = vcat(prefs,suffs)
+    forward_cands_with_ids   = forward_candidates(sg,K)
+    backward_cands_with_ids  = backward_candidates(sg,K)
+    sort!(forward_cands_with_ids)
+    sort!(backward_cands_with_ids)
     sort!(all_kmers_with_ids)
     all_kmers = [tup[1] for tup in all_kmers_with_ids] ## get kmers from (kmer,index) tuples
     @info string("All $K-mers: ", all_kmers)
+    final_idx = 0
     for start_seq_idx in eachindex(nodes_)
         covs = Vector{Int64}()
         @info string("Considering new sequence" , start_seq_idx)
@@ -637,15 +702,15 @@ function build_unitigs_from_graph(sg::GRAPH_TYPE,K::Int64,coverage::Vector{Int64
 
         # Check if the kmer is an end/junction of a unitig.
         contig = nodes_[start_seq_idx].seq
-        start_sequence_pref = prefs[start_seq_idx][1]
-        start_sequence_suff = suffs[start_seq_idx][1]
-        end_bw = is_end_bw_seq(start_sequence_pref,start_sequence_suff, all_kmers)
-        end_fw = is_end_fw_seq(start_sequence_pref,start_sequence_suff, all_kmers)
+        start_sequence_pref = get_prefix(contig,K)
+        start_sequence_suff = get_suffix(contig,K)
+        end_bw = is_end_bw_seq(start_sequence_pref,start_sequence_suff, forward_cands_with_ids,backward_cands_with_ids)
+        end_fw = is_end_fw_seq(start_sequence_pref,start_sequence_suff, forward_cands_with_ids,backward_cands_with_ids)
         if !end_bw && !end_fw
             @info string("Contig is middle of a bigger contig: " ,start_seq_idx ,"  ", contig)
             continue
         end
-
+        #final_idx = start_seq_idx
         if end_bw && end_fw
             @info string("Contig is a single contig: ", start_seq_idx ,"  ",contig)
             # Kmer as unitig
@@ -671,35 +736,37 @@ function build_unitigs_from_graph(sg::GRAPH_TYPE,K::Int64,coverage::Vector{Int64
                 # Add end nucleotide, update current kmer.
                 suff = get_suffix(current_contig,K)
                 pref  = get_prefix(current_contig,K)
-                get_fw_idxs2!(fwn, suff, all_kmers)
+                get_fw_idxs2!(fwn, suff, forward_cands_with_ids)
+                get_bw_idxs2!(fwn, reverse_complement(suff), backward_cands_with_ids)
                 println("Real forward index")
                 fw_idx = first(fwn).idx
-                real_idx = all_kmers_with_ids[abs(first(fwn).idx)][2]
-                println(real_idx)
-                if real_idx > 0
-                    fw_seq = nodes_[real_idx].seq
+                #real_idx = all_kmers_with_ids[abs(first(fwn).idx)][2]
+                #println(real_idx)
+                if fw_idx > 0
+                    fw_seq = nodes_[fw_idx].seq
                 else
-                    fw_seq = canonical!(nodes_[abs(real_idx)].seq )
+                    fw_seq = reverse_complement(nodes_[abs(fw_idx)].seq )
                 end
                 println("Forward sequence detected : ")
                 println(fw_seq)
                 @info string( "May extend unitig: ", fw_seq)
                 #current_contig = first(fwn).kmer
                 current_contig = fw_seq
-                if used_seqs[abs(real_idx)]
+                if used_seqs[abs(fw_idx)]
                     @info string("New contig is already used", current_contig)
                     break # Break circular contigs into lines.
                 end
-                used_seqs[abs(real_idx)] = true
+                used_seqs[abs(fw_idx)] = true
                 @info string("Extending the unitig ", s , "  with ", current_contig)
                 #push!(s, last(current_contig))
-                extend_seq(s,current_contig[K:end])
+                extend_seq!(s,current_contig[K:end])
                 @info string("After extending:  ", s )
                 update = true
+                final_idx = fw_idx
                 push!(covs,coverage[abs(real_idx)])
                 suff = get_suffix(current_contig,K)
                 pref  = get_prefix(current_contig,K)
-                end_fw = is_end_fw_seq(pref,suff, all_kmers)
+                end_fw = is_end_fw_seq(pref,suff, forward_cands_with_ids,backward_cands_with_ids)
             end
         end
         ## taking the median of the coverages
@@ -889,7 +956,70 @@ function extract_kmerlist(read_list::Vector{BioSequence{A}},k::Int64)where{A}
     return kmer_list,kmer_coverage
 end
 
+function build_unitigs_from_kmerlist!(sg::GRAPH_TYPE, kmerlist::Vector{DNAKmer{K}}) where {K}
+    @info string("Constructing unitigs from ", length(kmerlist), " ", K, "-mers")
+    used_kmers = falses(length(kmerlist))
 
+    for start_kmer_idx in eachindex(kmerlist)
+        @debug "Considering new kmer" start_kmer_idx
+
+        # Any kmer can only occur in one unitig.
+        if used_kmers[start_kmer_idx]
+            @debug "Kmer has been used" start_kmer_idx
+            continue
+        end
+
+        # Check if the kmer is an end/junction of a unitig.
+        start_kmer = kmerlist[start_kmer_idx]
+        end_bw = is_end_bw(start_kmer, kmerlist)
+        end_fw = is_end_fw(start_kmer, kmerlist)
+
+        if !end_bw && !end_fw
+            @debug "Kmer is middle of a unitig" start_kmer_idx start_kmer
+            continue
+        end
+
+        if end_bw && end_fw
+            @debug "Kmer is single unitig" start_kmer_idx start_kmer
+            # Kmer as unitig
+            s = BioSequence{DNAAlphabet{2}}(start_kmer)
+            used_kmers[start_kmer_idx] = true
+        else
+            # A unitig starts on this kmer.
+            # Make sure the unitig starts on FW.
+            current_kmer = start_kmer
+            used_kmers[start_kmer_idx] = true
+            if end_fw
+                current_kmer = reverse_complement(start_kmer)
+                end_fw = end_bw
+            end
+            @debug "Start of unitig" start_kmer current_kmer end_bw end_fw
+            # Start unitig
+            s = BioSequence{DNAAlphabet{2}}(current_kmer)
+            fwn = Vector{Kidx{K}}()
+            while !end_fw
+                # Add end nucleotide, update current kmer.
+                get_fw_idxs!(fwn, current_kmer, kmerlist)
+                @debug "Extending unitig" fwn
+                current_kmer = first(fwn).kmer
+                if used_kmers[first(fwn).idx]
+                    @debug "New kmer is already used" current_kmer
+                    break # Break circular contigs into lines.
+                end
+                used_kmers[first(fwn).idx] = true
+                push!(s, last(current_kmer))
+                end_fw = is_end_fw(current_kmer, kmerlist)
+            end
+        end
+        add_node!(sg, canonical!(s))
+    end
+    # A temporary check for circle problem for now.
+    if !all(used_kmers)
+        @warn "Some kmers have not been incorporated into unitigs. This may be a case of the circle problem" kmerlist[(!).(used_kmers)]
+    end
+    @info string("Constructed ", length(nodes(sg)), " unitigs")
+    return sg
+end
 
 ### changed the function to take as input coverage information and also to return the coverage for unitigs
 function build_unitigs_from_kmerlist(sg::GRAPH_TYPE, kmerlist_cover::Vector{Tuple{DNAKmer{K},Int64}}) where {K}
@@ -1019,7 +1149,7 @@ end
 
 
 
-function graph_from_fastq(fastq_file_name, read_num ::Int64,K::Int64,error::Bool)
+function graph_from_fastq(fastq_file_name, save_name, read_num ::Int64,K::Int64,error::Bool)
     r = FASTQ.Reader(open(fastq_file_name, "r"))
     fastq_reads = Vector{BioSequence{DNAAlphabet{4}}}()
     @info string("Getting ", read_num, " reads from " , fastq_file_name)
@@ -1036,7 +1166,8 @@ function graph_from_fastq(fastq_file_name, read_num ::Int64,K::Int64,error::Bool
     kmerlist,kmer_coverage = extract_kmerlist(fastq_reads,K)
     println(kmerlist)
     @info string("Extracted " ,Base.length(kmerlist)," ",K ,"-mers ")
-    new_graph_from_kmerlist_with_error_correction(kmerlist,kmer_coverage,error)
+    sg = new_graph_from_kmerlist_with_error_correction(kmerlist,kmer_coverage,error)
+    dump_to_gfa1(sg,save_name)
 end
 
 function new_graph_from_kmerlist_with_error_correction(kmerlist::Vector{DNAKmer{K}},kmer_coverage::Vector{Int64},error::Bool) where {K}
@@ -1059,12 +1190,13 @@ function new_graph_from_kmerlist_with_error_correction(kmerlist::Vector{DNAKmer{
         #@info string("Using randomly generated coverage information")
         #random_coverage = generate_coverage(Base.length(nodes(sg)))
         sg = error_correction(sg,K,coverages)
+        connect_unitigs_by_overlaps!(sg, DNAKmer{K})
         #sg = error_correction(sg,K,kmer_coverage)
         @info string("Graph simplification completed")
     end
-    save_name = "graph1.fasta"
-    @info string("Saving graph to: $save_name ")
-    save_graph(sg,save_name)
+    #save_name = "graph1.fasta"
+    #@info string("Saving graph to: $save_name ")
+    #save_graph(sg,save_name)
     sg
 end
 
@@ -1105,10 +1237,13 @@ function new_graph_from_kmerlist(kmerlist::Vector{DNAKmer{K}}) where {K}
         connect_unitigs_by_overlaps!(sg, DNAKmer{K})
     end
     @info string("Done c", str)
+    dump_to_gfa1(sg,"graph2")
     return sg
+
 end
 
-SequenceDistanceGraph(fastq_file_name::String,read_num::Int64,K::Int64,error::Bool)= graph_from_fastq(fastq_file_name, read_num,K,error)
+
+SequenceDistanceGraph(fastq_file_name::String,save_name::String,read_num::Int64,K::Int64,error::Bool)= graph_from_fastq(fastq_file_name, save_name, read_num,K,error)
 SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}},error::Bool) where {K} = new_graph_from_kmerlist_with_error_correction(kmerlist,error)
 SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}}) where {K} = new_graph_from_kmerlist(kmerlist)
 SequenceDistanceGraph(kmerlist::Vector{DNAKmer{K}},coverage::Vector{Int64}) where {K} = new_graph_from_kmerlist2(kmerlist,coverage)
