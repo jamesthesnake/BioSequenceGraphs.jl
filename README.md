@@ -11,7 +11,7 @@
 
 BioSequenceGraphs provides a representation of sequence graphs.
 Such graphs represent genome assemblies and population graphs of
-genotypes/haplotypes and variation.
+genotypes/haplotypes and variation. A new updated for chip-rna-seq data by jamesthesnake
 
 
 ## Installation
